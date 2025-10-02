@@ -1,0 +1,249 @@
+"use client";
+
+import React, { useEffect, useState, useRef } from "react";
+import Image from "next/image";
+import { useRouter, useParams } from "next/navigation";
+import { Toast } from "primereact/toast";
+import { Badge } from "primereact/badge";
+import { Button } from "primereact/button";
+import { TabView, TabPanel } from "primereact/tabview";
+import moment from "moment";
+
+type StudentProps = {
+    title?: string;
+    subtitle?: string;
+    ctaLabel?: string;
+    showSidebar?: boolean;
+};
+
+const Student: React.FC<StudentProps> = () => {
+    const router = useRouter();
+    const params = useParams();
+    const [studentData, setStudentData] = useState<any>(null);
+    const toast = useRef<Toast>(null);
+    const [loading, setLoading] = useState(false);
+    const studentId = params.id;
+
+    // Tab control
+    const [activeIndex, setActiveIndex] = useState<number>(0);
+
+    useEffect(() => {
+        const fetchStudentData = async () => {
+            setLoading(true);
+            try {
+                const res = await fetch(`/api/students/${studentId}`, {
+                    method: "GET",
+                    headers: { "Content-Type": "application/json" },
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    setStudentData(result.data || result);
+                } else {
+                    toast.current?.show({
+                        severity: "error",
+                        summary: "Fetch Error",
+                        detail: result.error || "Could not fetch student data.",
+                    });
+                }
+            } catch (err: any) {
+                toast.current?.show({
+                    severity: "error",
+                    summary: "Fetch Error",
+                    detail: err.message || "Failed to fetch student data.",
+                });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (studentId) fetchStudentData();
+    }, [studentId]);
+
+    const handleBack = () => router.back();
+
+    // Fallbacks:
+    // - online placeholder (gravatar mp silhouette)
+    // - final fallback to a public asset: /assets/profile1.png (place file in public/assets/)
+    const resolveImageSrc = (avarta: any) => {
+        const onlinePlaceholder = `https://www.gravatar.com/avatar/?d=mp&s=128`; // generic silhouette
+        const publicFallback = "/assets/profile1.png";
+
+        if (!avarta) return onlinePlaceholder;
+
+        if (typeof avarta === "object") {
+            if (typeof avarta.url === "string" && avarta.url.length > 0) return normalize(avarta.url);
+            return onlinePlaceholder;
+        }
+
+        if (typeof avarta === "string") {
+            // external full URL or data URL
+            if (/^https?:\/\//i.test(avarta) || avarta.startsWith("data:")) return avarta;
+            // local path — normalize to ensure leading slash; if it looks like a src import path, fall back to public asset
+            return normalize(avarta);
+        }
+
+        return onlinePlaceholder;
+
+        function normalize(p: string) {
+            const cleaned = p.replace(/^(?:\.\.\/|\.\/)+/, "");
+            // if path references source files (src/ or assets/), it won't be a valid public URL — return public fallback
+            if (!cleaned || cleaned.startsWith("src/") || cleaned.startsWith("assets/")) return publicFallback;
+            return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                </div>
+            </div>
+        );
+    }
+
+    const imageSrc = resolveImageSrc(studentData?.avarta);
+    const imageIsExternal = typeof imageSrc === "string" && /^https?:\/\//i.test(imageSrc);
+
+    return (
+        <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 p-4 sm:p-6 lg:p-12">
+            <div className="max-w-7xl mx-auto">
+                <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-indigo-50 shadow-sm text-indigo-600 overflow-hidden">
+                            <Image
+                                src={imageSrc as any}
+                                alt={studentData?.firstname ? `${studentData.firstname}'s profile` : "profile"}
+                                width={64}
+                                height={64}
+                                className="object-cover"
+                                // allow unoptimized for external placeholders / urls to avoid next.config changes
+                                unoptimized={imageIsExternal}
+                            />
+                        </div>
+
+                        <div>
+                            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
+                                {`${studentData?.firstname || ""} ${studentData?.othername || ""} ${studentData?.surname || ""}`.trim() || "Student"}
+                            </h1>
+                            <p className="text-xs sm:text-sm text-gray-500">Overview of student at Habnaj International Secondary Schools</p>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <Button
+                            icon="pi pi-arrow-left"
+                            label="Back"
+                            onClick={handleBack}
+                            className="bg-red-500 border border-red-200 rounded-xl shadow-sm text-xs sm:text-sm font-medium hover:shadow-md hover:bg-red-600 transition-all duration-300"
+                            aria-disabled
+                        />
+                    </div>
+                </header>
+
+                {/* Quick jump buttons */}
+                <div className="flex gap-2 justify-end mb-4">
+                    <Button onClick={() => setActiveIndex(0)} className="w-auto px-3 py-1 rounded-full" outlined={activeIndex !== 0} label="Personal Data" />
+                    <Button onClick={() => setActiveIndex(1)} className="w-auto px-3 py-1 rounded-full" outlined={activeIndex !== 1} label="Attendance" />
+                </div>
+
+                <section className="grid grid-cols-1 gap-4 sm:gap-6">
+                    <article>
+                        <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
+                            <TabView activeIndex={activeIndex} onTabChange={(e) => setActiveIndex(e.index)}>
+                                <TabPanel header="Personal Data">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <dl className="text-xs sm:text-sm text-gray-600 space-y-2 sm:space-y-4">
+                                                <div>
+                                                    <dt className="font-semibold">Name</dt>
+                                                    <dd>{`${studentData?.firstname || ""} ${studentData?.othername || ""} ${studentData?.surname || ""}`.trim() || "–"}</dd>
+                                                </div>
+
+                                                <div>
+                                                    <dt className="font-semibold">Date of Birth</dt>
+                                                    <dd>{studentData?.birthday ? moment(studentData.birthday).format("LL") : "–"}</dd>
+                                                </div>
+
+                                                <div>
+                                                    <dt className="font-semibold">Active Status</dt>
+                                                    <dd>
+                                                        <Badge value={studentData?.active ? "Active" : "Inactive"} severity={studentData?.active ? "success" : "danger"} />
+                                                    </dd>
+                                                </div>
+                                            </dl>
+                                        </div>
+
+                                        <div>
+                                            <dl className="text-xs sm:text-sm text-gray-600 space-y-2 sm:space-y-4">
+                                                <div>
+                                                    <dt className="font-semibold">Email</dt>
+                                                    <dd>{studentData?.email || "–"}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-semibold">Phone</dt>
+                                                    <dd>{studentData?.phone || "–"}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-semibold">Admission Date</dt>
+                                                    <dd>{studentData?.admissiondate ? moment(studentData.admissiondate).format("LL") : "–"}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-semibold">Guardian</dt>
+                                                    <dd>{`${studentData?.parent?.title || ""} ${studentData?.parent?.firstname || ""} ${studentData?.parent?.othername || ""} ${studentData?.parent?.surname || ""}`.trim() || "–"}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-semibold">House</dt>
+                                                    <dd>{studentData?.house || "–"}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-semibold">Address</dt>
+                                                    <dd>{studentData?.address || "–"}</dd>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div>
+                                                        <dt className="font-semibold">Total Attendances</dt>
+                                                        <dd><Badge value={studentData?._count?.attendances ?? (studentData?.attendances?.length ?? 0)} severity="info" /></dd>
+                                                    </div>
+                                                </div>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </TabPanel>
+
+                                <TabPanel header="Attendance">
+                                    {studentData?.attendances?.length > 0 ? (
+                                        <div className="overflow-x-auto sm:overflow-x-visible scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                                            <table className="w-full min-w-[500px] text-xs sm:text-sm text-left text-gray-600">
+                                                <thead className="text-xs sm:text-sm text-gray-700 uppercase bg-gray-50">
+                                                    <tr>
+                                                        <th scope="col" className="px-2 sm:px-4 py-3">Date</th>
+                                                        <th scope="col" className="px-2 sm:px-4 py-3">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {studentData.attendances.map((attendance: any) => (
+                                                        <tr key={attendance.id} className="bg-white border-b border-gray-300 hover:bg-gray-50">
+                                                            <td className="px-2 sm:px-4 py-3">{attendance.date ? new Date(attendance.date).toLocaleDateString() : "–"}</td>
+                                                            <td className="px-2 sm:px-4 py-3">{attendance.status || "–"}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-gray-500">No attendance records for this student.</p>
+                                    )}
+                                </TabPanel>
+                            </TabView>
+                        </div>
+                    </article>
+                </section>
+            </div>
+
+            <Toast ref={toast} />
+        </main>
+    );
+};
+
+export default Student;
