@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { announcementUpdateSchema } from '@/lib/schemas/index';
@@ -9,7 +7,7 @@ interface RouteParams {
     params: { id: string };
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }): Promise<NextResponse> {
     try {
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.PARENT]);
         if (validation.error) return validation.error;
@@ -42,7 +40,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }): Promise<NextResponse> {
     try {
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
@@ -98,7 +96,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
     }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }): Promise<NextResponse> {
     try {
         const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
