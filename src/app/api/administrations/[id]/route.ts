@@ -1,5 +1,5 @@
-// app/api/administrations/[id]/route.ts
-import { NextRequest } from 'next/server';
+// src/app/api/administrations/[id]/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { administrationUpdateSchema } from '@/lib/schemas/index';
 import {
@@ -12,11 +12,7 @@ import {
 } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
 
-interface RouteParams {
-    params: { id: string };
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
     try {
         const { id } = params;
 
@@ -27,7 +23,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         // Only super admin can view any administrator, others can only view their own data
         if (userRole !== UserRole.SUPER && id !== session!.user.id) {
-            return new Response(JSON.stringify({ error: 'Access denied' }), { status: 403 });
+            return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 
         const resourceCheck = await checkResourceExists(prisma.administration, id, 'Administrator not found');
@@ -52,7 +48,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
     try {
         const { id } = params;
 
@@ -62,7 +58,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         const { userRole, session } = validation;
 
         if (userRole !== UserRole.SUPER && id !== session!.user.id) {
-            return new Response(JSON.stringify({ error: 'Access denied' }), { status: 403 });
+            return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 
         const resourceCheck = await checkResourceExists(prisma.administration, id, 'Administrator not found');
@@ -80,13 +76,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             });
 
             if (existingUser) {
-                return new Response(JSON.stringify({ error: 'Email already exists.' }), { status: 409 });
+                return NextResponse.json({ error: 'Email already exists.' }, { status: 409 });
             }
         }
 
         // Non-super users cannot change their own role
         if (userRole !== UserRole.SUPER && role && id === session!.user.id) {
-            return new Response(JSON.stringify({ error: 'Cannot change your own role' }), { status: 403 });
+            return NextResponse.json({ error: 'Cannot change your own role' }, { status: 403 });
         }
 
         const updateData: Record<string, any> = {};
@@ -114,7 +110,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
     try {
         const { id } = params;
 
@@ -125,8 +121,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
         // Prevent deletion of current user
         if (id === session!.user.id) {
-            return new Response(
-                JSON.stringify({ error: 'Invalid operation - You cannot delete your own account!' }),
+            return NextResponse.json(
+                { error: 'Invalid operation - You cannot delete your own account!' },
                 { status: 400 }
             );
         }
