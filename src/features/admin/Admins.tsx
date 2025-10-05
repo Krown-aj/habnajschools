@@ -389,7 +389,7 @@ const Admins: React.FC<AdminsProps> = ({
                             disabled={current && updatingIds.includes(current.id)}
                         >
                             {icon}
-                            <span className="ml-2">{label}</span>
+                            <span className="ml-2">{`${label === 'Admin' || label === 'Super' ? 'Make ' + label : label}`}</span>
                         </Button>
                     ))}
                 </div>

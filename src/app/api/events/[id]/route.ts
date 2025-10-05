@@ -2,28 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { eventUpdateSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, checkResourceExists, UserRole } from '@/lib/utils/api-helpers';
-import { start } from 'repl';
 
-interface RouteParams {
-    params: { id: string };
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.PARENT]);
         if (validation.error) return validation.error;
 
         // Check if the event exists
         const resourceCheck = await checkResourceExists(
             prisma.event,
-            params.id,
+            id,
             'Event not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
 
         // Since Event has no direct relations, all authorized users can see all events
         const event = await prisma.event.findUnique({
-            where: { id: Number(params.id) },
+            where: { id: Number(id) },
             select: {
                 id: true,
                 title: true,
@@ -43,14 +39,15 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
     }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
 
         const resourceCheck = await checkResourceExists(
             prisma.event,
-            params.id,
+            id,
             'Event not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
@@ -66,7 +63,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
                 where: {
                     title: title || undefined,
                     startTime: startTime || undefined,
-                    id: { not: Number(params.id) }
+                    id: { not: Number(id) }
                 }
             });
 
@@ -85,7 +82,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
         if (endTime) updateData.endTime = endTime;
 
         const updatedEvent = await prisma.event.update({
-            where: { id: Number(params.id) },
+            where: { id: Number(id) },
             data: updateData,
             select: {
                 id: true,
@@ -102,20 +99,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
     }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
 
         const resourceCheck = await checkResourceExists(
             prisma.event,
-            params.id,
+            id,
             'Event not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
 
         await prisma.event.delete({
-            where: { id: Number(params.id) }
+            where: { id: Number(id) }
         });
 
         return successResponse({ message: 'Event deleted successfully' });

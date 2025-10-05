@@ -4,12 +4,9 @@ import { Prisma } from '@/generated/prisma';
 import { lessonUpdateSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, checkResourceExists, UserRole } from '@/lib/utils/api-helpers';
 
-interface RouteParams {
-    params: { id: string };
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.PARENT]);
         if (validation.error) return validation.error;
 
@@ -18,13 +15,13 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
         // Check if the lesson exists
         const resourceCheck = await checkResourceExists(
             prisma.lesson,
-            params.id,
+            id,
             'Lesson not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
 
         // Restrict access based on user role
-        const where: Prisma.LessonWhereInput = { id: parseInt(params.id) };
+        const where: Prisma.LessonWhereInput = { id: parseInt(id) };
         if (userRole === UserRole.TEACHER) {
             where.OR = [
                 { teacherid: session!.user.id },
@@ -67,14 +64,15 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
     }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
 
         const resourceCheck = await checkResourceExists(
             prisma.lesson,
-            params.id,
+            id,
             'Lesson not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
@@ -120,7 +118,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
                             ]
                         }
                     ],
-                    id: { not: parseInt(params.id) }
+                    id: { not: parseInt(id) }
                 }
             });
 
@@ -142,7 +140,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
         if (teacherid) updateData.teacherid = teacherid;
 
         const updatedLesson = await prisma.lesson.update({
-            where: { id: parseInt(params.id) },
+            where: { id: parseInt(id) },
             data: updateData,
             select: {
                 id: true,
@@ -162,20 +160,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
     }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
 
         const resourceCheck = await checkResourceExists(
             prisma.lesson,
-            params.id,
+            id,
             'Lesson not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
 
         await prisma.lesson.delete({
-            where: { id: parseInt(params.id) }
+            where: { id: parseInt(id) }
         });
 
         return successResponse({ message: 'Lesson deleted successfully' });
