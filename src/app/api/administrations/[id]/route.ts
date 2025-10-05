@@ -1,12 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
+// app/api/administrations/[id]/route.ts
+import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { administrationUpdateSchema } from '@/lib/schemas/index';
-import { validateSession, validateRequestBody, handleError, successResponse, checkResourceExists, UserRole } from '@/lib/utils/api-helpers';
+import {
+    validateSession,
+    validateRequestBody,
+    handleError,
+    successResponse,
+    checkResourceExists,
+    UserRole
+} from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+interface RouteParams {
+    params: { id: string };
+}
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
     try {
-        const { id } = await params;
+        const { id } = params;
+
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
 
@@ -14,14 +27,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         // Only super admin can view any administrator, others can only view their own data
         if (userRole !== UserRole.SUPER && id !== session!.user.id) {
-            return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+            return new Response(JSON.stringify({ error: 'Access denied' }), { status: 403 });
         }
 
-        const resourceCheck = await checkResourceExists(
-            prisma.administration,
-            id,
-            'Administrator not found'
-        );
+        const resourceCheck = await checkResourceExists(prisma.administration, id, 'Administrator not found');
         if (resourceCheck.error) return resourceCheck.error;
 
         const administrator = await prisma.administration.findUnique({
@@ -43,24 +52,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, { params }: RouteParams) {
     try {
-        const { id } = await params;
+        const { id } = params;
+
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
 
         const { userRole, session } = validation;
 
-        // Only super admin can update any administrator, others can only update their own data
         if (userRole !== UserRole.SUPER && id !== session!.user.id) {
-            return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+            return new Response(JSON.stringify({ error: 'Access denied' }), { status: 403 });
         }
 
-        const resourceCheck = await checkResourceExists(
-            prisma.administration,
-            id,
-            'Administrator not found'
-        );
+        const resourceCheck = await checkResourceExists(prisma.administration, id, 'Administrator not found');
         if (resourceCheck.error) return resourceCheck.error;
 
         const bodyValidation = await validateRequestBody(request, administrationUpdateSchema);
@@ -75,22 +80,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             });
 
             if (existingUser) {
-                return NextResponse.json(
-                    { error: 'Email already exists.' },
-                    { status: 409 }
-                );
+                return new Response(JSON.stringify({ error: 'Email already exists.' }), { status: 409 });
             }
         }
 
         // Non-super users cannot change their own role
         if (userRole !== UserRole.SUPER && role && id === session!.user.id) {
-            return NextResponse.json(
-                { error: 'Cannot change your own role' },
-                { status: 403 }
-            );
+            return new Response(JSON.stringify({ error: 'Cannot change your own role' }), { status: 403 });
         }
 
-        const updateData: any = {};
+        const updateData: Record<string, any> = {};
         if (email) updateData.email = email;
         if (role) updateData.role = role;
         if (active !== undefined) updateData.active = active;
@@ -115,9 +114,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
     try {
-        const { id } = await params;
+        const { id } = params;
+
         const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
 
@@ -125,22 +125,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
         // Prevent deletion of current user
         if (id === session!.user.id) {
-            return NextResponse.json(
-                { error: 'Invalid operation - You cannot delete your own account!' },
+            return new Response(
+                JSON.stringify({ error: 'Invalid operation - You cannot delete your own account!' }),
                 { status: 400 }
             );
         }
 
-        const resourceCheck = await checkResourceExists(
-            prisma.administration,
-            id,
-            'Administrator not found'
-        );
+        const resourceCheck = await checkResourceExists(prisma.administration, id, 'Administrator not found');
         if (resourceCheck.error) return resourceCheck.error;
 
-        await prisma.administration.delete({
-            where: { id }
-        });
+        await prisma.administration.delete({ where: { id } });
 
         return successResponse({ message: 'Administrator deleted successfully' });
     } catch (error) {
