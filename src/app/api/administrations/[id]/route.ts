@@ -12,16 +12,17 @@ import {
 } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+type ParamsContext = { params: { id: string } };
+
+export async function GET(request: NextRequest, context: unknown) {
     try {
-        const { id } = params;
+        const { id } = (context as ParamsContext).params;
 
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
 
         const { userRole, session } = validation;
 
-        // Only super admin can view any administrator, others can only view their own data
         if (userRole !== UserRole.SUPER && id !== session!.user.id) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
@@ -48,9 +49,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: unknown) {
     try {
-        const { id } = params;
+        const { id } = (context as ParamsContext).params;
 
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
@@ -110,16 +111,15 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: unknown) {
     try {
-        const { id } = params;
+        const { id } = (context as ParamsContext).params;
 
         const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
 
         const { session } = validation;
 
-        // Prevent deletion of current user
         if (id === session!.user.id) {
             return NextResponse.json(
                 { error: 'Invalid operation - You cannot delete your own account!' },
