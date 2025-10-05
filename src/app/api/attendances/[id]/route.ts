@@ -4,12 +4,9 @@ import { attendanceUpdateSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, checkResourceExists, UserRole } from '@/lib/utils/api-helpers';
 import { Prisma } from '@/generated/prisma/wasm';
 
-interface RouteParams {
-    params: { id: string };
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.PARENT]);
         if (validation.error) return validation.error;
 
@@ -18,13 +15,13 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
         // Check if the attendance exists
         const resourceCheck = await checkResourceExists(
             prisma.attendance,
-            params.id,
+            id,
             'Attendance not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
 
         // Restrict access based on user role
-        const where: Prisma.AttendanceWhereInput = { id: parseInt(params.id) };
+        const where: Prisma.AttendanceWhereInput = { id: parseInt(id) };
         if (userRole === UserRole.TEACHER) {
             where.lesson = {
                 OR: [
@@ -73,8 +70,9 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
     }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER]);
         if (validation.error) return validation.error;
 
@@ -82,7 +80,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
 
         const resourceCheck = await checkResourceExists(
             prisma.attendance,
-            params.id,
+            id,
             'Attendance not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
@@ -95,7 +93,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
         // If teacher, ensure they are authorized for this attendance's lesson
         if (userRole === UserRole.TEACHER) {
             const attendance = await prisma.attendance.findUnique({
-                where: { id: parseInt(params.id) },
+                where: { id: parseInt(id) },
                 select: { lesson: { select: { teacherid: true, class: { select: { formmasterid: true } } } } }
             });
             if (!attendance) {
@@ -113,7 +111,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
         if (date !== undefined) updateData.date = date;
 
         const updatedAttendance = await prisma.attendance.update({
-            where: { id: parseInt(params.id) },
+            where: { id: parseInt(id) },
             data: updateData,
             select: {
                 id: true,
@@ -145,20 +143,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
     }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
 
         const resourceCheck = await checkResourceExists(
             prisma.attendance,
-            params.id,
+            id,
             'Attendance not found'
         );
         if (resourceCheck.error) return resourceCheck.error;
 
         await prisma.attendance.delete({
-            where: { id: parseInt(params.id) }
+            where: { id: parseInt(id) }
         });
 
         return successResponse({ message: 'Attendance deleted successfully' });
