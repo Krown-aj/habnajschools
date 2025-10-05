@@ -4,15 +4,9 @@ import { administrationUpdateSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, checkResourceExists, UserRole } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
 
-// Define the type for the context object
-type RouteContext = { params: { id: string } };
-
-export async function GET(
-    request: NextRequest,
-    { params }: RouteContext
-): Promise<NextResponse> {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = params; // No need to await params
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
 
@@ -39,8 +33,8 @@ export async function GET(
                 active: true,
                 createdAt: true,
                 updatedAt: true,
-                _count: { select: { notifications: true } },
-            },
+                _count: { select: { notifications: true } }
+            }
         });
 
         return successResponse(administrator);
@@ -49,12 +43,9 @@ export async function GET(
     }
 }
 
-export async function PUT(
-    request: NextRequest,
-    { params }: RouteContext
-): Promise<NextResponse> {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = params; // No need to await params
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
         if (validation.error) return validation.error;
 
@@ -80,17 +71,23 @@ export async function PUT(
         // Check for email conflicts
         if (email) {
             const existingUser = await prisma.administration.findFirst({
-                where: { email, id: { not: id } },
+                where: { email, id: { not: id } }
             });
 
             if (existingUser) {
-                return NextResponse.json({ error: 'Email already exists.' }, { status: 409 });
+                return NextResponse.json(
+                    { error: 'Email already exists.' },
+                    { status: 409 }
+                );
             }
         }
 
         // Non-super users cannot change their own role
         if (userRole !== UserRole.SUPER && role && id === session!.user.id) {
-            return NextResponse.json({ error: 'Cannot change your own role' }, { status: 403 });
+            return NextResponse.json(
+                { error: 'Cannot change your own role' },
+                { status: 403 }
+            );
         }
 
         const updateData: any = {};
@@ -108,8 +105,8 @@ export async function PUT(
                 role: true,
                 active: true,
                 createdAt: true,
-                updatedAt: true,
-            },
+                updatedAt: true
+            }
         });
 
         return successResponse(updatedAdmin);
@@ -118,12 +115,9 @@ export async function PUT(
     }
 }
 
-export async function DELETE(
-    request: NextRequest,
-    { params }: RouteContext
-): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = params; // No need to await params
+        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
 
@@ -145,7 +139,7 @@ export async function DELETE(
         if (resourceCheck.error) return resourceCheck.error;
 
         await prisma.administration.delete({
-            where: { id },
+            where: { id }
         });
 
         return successResponse({ message: 'Administrator deleted successfully' });
