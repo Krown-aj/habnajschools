@@ -129,7 +129,7 @@ const Header: FC<HeaderProps> = ({
                         {/* Logo */}
                         <Link href="/" className="flex items-center space-x-3 flex-shrink-0 rounded-full border-white">
                             <Image src={logoSrc} alt="Logo" width={60} height={60} className="lg:w-18 lg:h-18 rounded-lg shadow-sm" />
-                            <span className={`font-bold text-sm sm:text-lg uppercase tracking-wide transition-colors duration-300 ${scrolled ? 'text-gray-100' : 'text-white'
+                            <span className={`font-bold text-xs sm:text-lg uppercase tracking-wide transition-colors duration-300 ${scrolled ? 'text-gray-100' : 'text-white'
                                 }`}>{title}</span>
                         </Link>
 

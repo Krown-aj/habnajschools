@@ -30,7 +30,7 @@ const stats: StatItem[] = [
 
 const Hero: React.FC = () => {
     return (
-        <header className="relative w-full h-[60vh] sm:h-[100vh] overflow-hidden">
+        <header className="relative w-full h-[80vh] sm:h-[100vh] overflow-hidden">
             {/* Background image + overlay */}
             <Image src={images.computerroom} alt="Habnaj International Schools campus" fill className="object-cover object-center" priority />
             <div className="absolute inset-0 bg-gradient-to-br from-blue-900/70 via-blue-800/40 to-cyan-600/25" />
@@ -86,7 +86,7 @@ const Hero: React.FC = () => {
                                     </div>
                                     <div>
                                         <div className="text-xl sm:text-2xl font-bold text-white">{s.value}</div>
-                                        <div className="text-xs sm:text-sm text-white/80">{s.label}</div>
+                                        <div className="text-xs sm:text-sm text-white/80 font-bold">{s.label}</div>
                                     </div>
                                 </div>
                             );

@@ -607,8 +607,6 @@ const FeesPage: React.FC = () => {
         const rows: { label: string; amount: number | string }[] = [];
 
         if (section.id === "nursery") {
-            // nursery structure:
-            // school fees, text books and writting materials, pe dress, uniform, himar, cardigan, development fee, exam fee, ict charges
             rows.push({ label: "School Fees", amount: schedule.schoolFees });
             rows.push({ label: "Text Books & Writing Materials", amount: schedule.textbooks });
             rows.push({ label: "PE dress", amount: schedule.peDress });
@@ -619,8 +617,6 @@ const FeesPage: React.FC = () => {
             rows.push({ label: "Exam Fee", amount: schedule.examsFee });
             rows.push({ label: "ICT charges", amount: schedule.ictCharges });
         } else if (section.id === "primary") {
-            // primary structure:
-            // school fees, text books, excercise books, cardigan, uniforms, himar, development fee, ict charges, examination fee, sport wear
             rows.push({ label: "School Fees", amount: schedule.schoolFees });
             rows.push({ label: "Text Books", amount: schedule.textbooks });
             rows.push({ label: "Exercise Books", amount: schedule.exerciseBooks ?? 0 });
@@ -632,8 +628,6 @@ const FeesPage: React.FC = () => {
             rows.push({ label: "Examination Fee", amount: schedule.examsFee });
             rows.push({ label: "Sport wear", amount: schedule.peDress });
         } else {
-            // junior structure:
-            // school fees, text books, writting materials, cardigan, uniforms, himar, development fee, ict charges, exams fee, sport wear
             rows.push({ label: "School Fees", amount: schedule.schoolFees });
             rows.push({ label: "Text Books", amount: schedule.textbooks });
             rows.push({ label: "Writing Materials", amount: schedule.writingMaterials ?? 0 });
@@ -741,15 +735,15 @@ const FeesPage: React.FC = () => {
                                             <h4 className="font-semibold text-gray-900">Fees Breakdown</h4>
 
                                             {/* class selector + term selector */}
-                                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                                <div className="flex items-center gap-2">
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+                                                <div className="flex items-center gap-2 w-full sm:w-auto">
                                                     <label htmlFor="class-select" className="sr-only">Select class</label>
-                                                    <select id="class-select" value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)} className="rounded-md border-gray-200 px-2 py-1 text-sm">
+                                                    <select id="class-select" value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)} className="w-full sm:w-auto rounded-md border-gray-200 px-2 py-1 text-sm">
                                                         {active.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                                                     </select>
 
                                                     <label htmlFor="term-select" className="sr-only">Select term</label>
-                                                    <select id="term-select" value={selectedTerm} onChange={(e) => setSelectedTerm(e.target.value as TermKey)} className="rounded-md border-gray-200 px-2 py-1 text-sm">
+                                                    <select id="term-select" value={selectedTerm} onChange={(e) => setSelectedTerm(e.target.value as TermKey)} className="w-full sm:w-auto rounded-md border-gray-200 px-2 py-1 text-sm">
                                                         <option value="first">First Term</option>
                                                         <option value="second">Second Term</option>
                                                         <option value="third">Third Term</option>
@@ -758,9 +752,9 @@ const FeesPage: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        {/* Row-oriented table (S/N | Item / Amount) */}
-                                        <div className="mt-3 overflow-auto rounded-lg border border-gray-100">
-                                            <table className="min-w-full w-full text-sm text-left">
+                                        {/* Desktop/table view (sm+) */}
+                                        <div className="mt-3 overflow-auto rounded-lg border border-gray-100 hidden sm:block">
+                                            <table className="min-w-full w-full text-sm text-left table-fixed">
                                                 <thead className="bg-gray-50">
                                                     <tr>
                                                         <th className="px-4 py-3 w-12 sm:w-16">S/N</th>
@@ -785,6 +779,22 @@ const FeesPage: React.FC = () => {
                                                     })}
                                                 </tbody>
                                             </table>
+                                        </div>
+
+                                        {/* Mobile stacked view */}
+                                        <div className="mt-3 space-y-2 sm:hidden">
+                                            {rows.map((r, idx) => {
+                                                const isTotal = idx === rows.length - 1;
+                                                return (
+                                                    <div key={r.label} className={`bg-white rounded-lg p-3 flex items-center justify-between ${isTotal ? "border border-gray-200" : "border-b border-gray-100"}`}>
+                                                        <div>
+                                                            <div className={`text-sm ${isTotal ? "font-semibold" : "font-medium"} text-gray-700`}>{r.label}</div>
+                                                            {!isTotal && <div className="text-xs text-gray-500 mt-0.5">{idx + 1}.</div>}
+                                                        </div>
+                                                        <div className={`text-sm ${isTotal ? "font-semibold text-gray-900" : "text-gray-700"}`}>{typeof r.amount === "number" ? currency(r.amount) : r.amount}</div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
 
                                         <div className="mt-4 text-sm text-gray-600">
