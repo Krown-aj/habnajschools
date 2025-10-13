@@ -10,7 +10,7 @@ type LessonsProps = {
 
 const Lessons: React.FC<LessonsProps> = ({
     title = "Feature coming soon",
-    subtitle = "This section is currently being developed. Check back later or preview the layout.",
+    subtitle = "This section is currently being tested. Check back later or preview the layout.",
     ctaLabel = "Get notified",
     showSidebar = true,
 }) => {
@@ -50,7 +50,7 @@ const Lessons: React.FC<LessonsProps> = ({
                 <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <article className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-medium text-gray-900">Under Construction</h2>
+                            <h2 className="text-lg font-medium text-gray-900">Under Testing</h2>
                             <span className="text-sm text-indigo-600 font-medium">Preview</span>
                         </div>
 

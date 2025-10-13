@@ -13,6 +13,7 @@ import { Toast } from "primereact/toast";
 
 import { teacherSchema, TeacherSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
+import Uploader from "@/components/Uploader/Uploader";
 
 // Define option interface
 interface Option {
@@ -67,6 +68,8 @@ const NewTeacher: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [states, setStates] = useState<Option[]>([]);
     const [lgas, setLgas] = useState<Option[]>([]);
+    const [uploaded, setUploaded] = useState<{ path: string; id: string; url?: string | null } | null>(null);
+
 
     const {
         register,
@@ -204,7 +207,8 @@ const NewTeacher: React.FC = () => {
         try {
             const payload = {
                 ...data,
-                password: 'password'
+                password: 'password',
+                avarta: uploaded ? uploaded.path : null,
             };
             const res = await fetch("/api/teachers", {
                 method: "POST",
@@ -254,6 +258,13 @@ const NewTeacher: React.FC = () => {
             </div>
             <div className="space-y-4 p-4">
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
+                    <div className="p-field">
+                        <Uploader
+                            onUploadSuccess={(meta) => setUploaded(meta)}
+                            chooseLabel="Drag & Drop or Click to Upload Profile Picture"
+                            dropboxFolder="/habnajschools"
+                        />
+                    </div>
                     {/* Title and qualification field */}
                     <div className="p-field grid grid-cols-2 gap-4">
                         <div>

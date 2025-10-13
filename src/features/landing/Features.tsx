@@ -75,11 +75,11 @@ const features: SchoolFeature[] = [
         color: 'from-green-500 to-teal-500'
     },
     {
-        title: 'Islamiyya Classes',
+        title: 'Madrasah Classes',
         description:
-            'In addition to formal education, the school offers Islamiyya classes for children of all ages, held after school hours from Monday to Thursday. These classes are open to both our students and children from other schools.',
+            'In addition to formal education, the school offers Madrasah classes for children of all ages, held after school hours from Monday to Thursday. These classes are open to both our students and children from other schools.',
         imageSrc: images.student8,
-        alt: 'Children attending Islamiyya classes',
+        alt: 'Children attending Madrasah classes',
         icon: <FaBookOpen className="text-2xl" />,
         stats: [
             { number: 'All Ages', label: 'Eligibility' },

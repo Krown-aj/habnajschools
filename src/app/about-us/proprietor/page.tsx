@@ -10,19 +10,21 @@ import { CONTACT, MANAGEMENT, SCHOOL } from "@/constants";
 const container: Variants = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0, transition: { staggerChildren: 0.08 } } };
 const fadeUp: Variants = { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0, transition: { duration: 0.6 } } };
 
-
+// Responsive Image component with reliable fallback
 const ImageWithFallback: React.FC<{ src?: string; alt?: string; className?: string; name?: string }> = ({ src, alt, className = "", name = "Profile" }) => {
-    const placeholder = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff&size=256`;
-    const [currentSrc, setCurrentSrc] = useState(src || placeholder);
+    const placeholder = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff&size=512`;
+    const [currentSrc, setCurrentSrc] = useState<string>(src || placeholder);
 
     return (
         <img
             src={currentSrc}
             alt={alt || name}
-            className={`object-cover ${className}`}
-            onError={(e) => {
-                const t = e.currentTarget as HTMLImageElement;
-                if (t.src !== placeholder) t.src = placeholder;
+            className={`object-cover w-full h-full ${className}`}
+            loading="lazy"
+            decoding="async"
+            onError={() => {
+                // update using React state so we don't accidentally create infinite loops by manipulating DOM directly
+                if (currentSrc !== placeholder) setCurrentSrc(placeholder);
             }}
         />
     );
@@ -72,9 +74,11 @@ const ManagementAboutOptimized: React.FC = () => {
 
                     {/* Main content — profiles */}
                     <motion.div variants={fadeUp} className="lg:col-span-2 space-y-8">
+                        {/* Profile card — Proprietor */}
                         <article className="bg-white rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 items-start">
-                            <div className="w-full md:w-48 h-48 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                                <ImageWithFallback src={proprietorLocal} alt="Engr. Prof. Shuaibu M. Musa" className="w-full h-full" name="Engr. Prof. Shuaibu M. Musa" />
+                            {/* Responsive image wrapper: uses aspect-square so image stays square on small screens */}
+                            <div className="w-full md:w-48 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 aspect-square">
+                                <ImageWithFallback src={proprietorLocal} alt="Engr. Prof. Shuaibu M. Musa" className="" name="Engr. Prof. Shuaibu M. Musa" />
                             </div>
 
                             <div className="flex-1">
@@ -97,9 +101,10 @@ const ManagementAboutOptimized: React.FC = () => {
                             </div>
                         </article>
 
+                        {/* Profile card — Director */}
                         <article className="bg-white rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 items-start">
-                            <div className="w-full md:w-48 h-48 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                                <ImageWithFallback src={mdLocal} alt="Hajiya Zainab S. Musa" className="w-full h-full" name="Hajiya Zainab S. Musa" />
+                            <div className="w-full md:w-48 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 aspect-square">
+                                <ImageWithFallback src={mdLocal} alt="Hajiya Zainab S. Musa" className="" name="Hajiya Zainab S. Musa" />
                             </div>
 
                             <div className="flex-1">

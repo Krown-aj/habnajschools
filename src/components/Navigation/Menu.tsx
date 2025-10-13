@@ -69,6 +69,12 @@ const menuItems = [
                 visible: ['admin', 'super', 'teacher']
             },
             {
+                icon: GraduationCap,
+                label: 'My Children',
+                href: (role: string) => `/dashboard/${role}/students`,
+                visible: ['parent']
+            },
+            {
                 icon: UserCheck,
                 label: 'Parents',
                 href: (role: string) => `/dashboard/${role}/parents`,
@@ -115,18 +121,18 @@ const menuItems = [
                  href: (role: string) => `/dashboard/${role}/assignments`,
                  visible: ['admin', 'super', 'teacher', 'student', 'parent']
              }, */
-            /* {
-                icon: BarChart3,
-                label: 'Results',
-                href: (role: string) => `/dashboard/${role}/results`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
-            },
-            {
-                icon: UserCheck,
-                label: 'Attendance',
-                href: (role: string) => `/dashboard/${role}/attendance`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
-            }, */
+            /*  {
+                 icon: BarChart3,
+                 label: 'Results',
+                 href: (role: string) => `/dashboard/${role}/results`,
+                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
+             },
+             {
+                 icon: UserCheck,
+                 label: 'Attendance',
+                 href: (role: string) => `/dashboard/${role}/attendance`,
+                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
+             }, */
         ],
     },
     /* {
@@ -138,12 +144,6 @@ const menuItems = [
                 href: (role: string) => `/dashboard/${role}/events`,
                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
             },
-             {
-                 icon: MessageSquare,
-                 label: 'Messages',
-                 href: (role: string) => `/dashboard/${role}/messages`,
-                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
-             },
             {
                 icon: Megaphone,
                 label: 'Announcements',
@@ -155,60 +155,36 @@ const menuItems = [
     {
         title: 'SETTINGS',
         items: [
-            /* {
-                icon: User,
-                label: 'Profile',
-                href: (role: string) => `/dashboard/${role}/settings/profile`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
-            }, */
             {
                 icon: Settings,
                 label: 'Grading Policies',
                 href: (role: string) => `/dashboard/${role}/settings/grading-policies`,
                 visible: ['admin', 'super',]
             },
-            /* {
-                icon: Settings,
-                label: 'Preferences',
-                href: (role: string) => `/dashboard/${role}/settings/preferences`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
-            }, */
-            /* {
-                icon: Bell,
-                label: 'Notifications',
-                href: (role: string) => `/dashboard/${role}/settings/notifications`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
-            }, */
-            /* {
-                icon: Shield,
-                label: 'Security',
-                href: (role: string) => `/dashboard/${role}/settings/security`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
-            }, */
             /*  {
-                 icon: Palette,
-                 label: 'Appearance',
-                 href: (role: string) => `/dashboard/${role}/settings/appearance`,
+                 icon: User,
+                 label: 'Profile',
+                 href: (role: string) => `/dashboard/${role}/settings/profile`,
                  visible: ['admin', 'super', 'teacher', 'student', 'parent']
              },
-            {
-                icon: Database,
-                label: 'Data & Privacy',
-                href: (role: string) => `/dashboard/${role}/settings/privacy`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
-            },
-            {
-                icon: Key,
-                label: 'API Keys',
-                href: (role: string) => `/dashboard/${role}/settings/api`,
-                visible: ['admin', 'super', 'management']
-            }, */
-            /* {
-                icon: HelpCircle,
-                label: 'Help & Support',
-                href: '/dashboard/help',
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
-            }, */
+             {
+                 icon: Settings,
+                 label: 'Preferences',
+                 href: (role: string) => `/dashboard/${role}/settings/preferences`,
+                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
+             },
+             {
+                 icon: Shield,
+                 label: 'Security',
+                 href: (role: string) => `/dashboard/${role}/settings/security`,
+                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
+             },
+             {
+                 icon: HelpCircle,
+                 label: 'Help & Support',
+                 href: '/dashboard/help',
+                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
+             }, */
         ],
     },
 ];
