@@ -9,6 +9,7 @@ import { InputText } from "primereact/inputtext";
 import { Dropdown } from "primereact/dropdown";
 import { Button } from "primereact/button";
 import { Toast } from "primereact/toast";
+import Uploader from "@/components/Uploader/Uploader";
 
 import { administrationSchema, AdministrationSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
@@ -17,6 +18,7 @@ const NewAdmin: React.FC = () => {
     const router = useRouter();
     const toast = useRef<Toast>(null);
     const [loading, setLoading] = useState(false);
+    const [uploaded, setUploaded] = useState<{ path: string; id: string; url?: string | null } | null>(null);
     const { data: session } = useSession();
 
     const role = session?.user?.role || 'Guest';
@@ -41,8 +43,10 @@ const NewAdmin: React.FC = () => {
         mode: "onBlur",
         defaultValues: {
             email: "",
+            username: "",
             role: "Admin",
             password: "password",
+            avatar: "",
         },
     });
 
@@ -64,13 +68,16 @@ const NewAdmin: React.FC = () => {
     const onSubmit = async (data: AdministrationSchema) => {
         setLoading(true);
         try {
+            const payload = {
+                ...data,
+                avarta: uploaded ? uploaded.path : null,
+            };
             const res = await fetch("/api/administrations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
             });
             const result = await res.json();
-            setLoading(false);
             if (res.ok) {
                 show("success", "Admin Created", "New Admin has been created successfully.");
                 setTimeout(() => {
@@ -88,15 +95,27 @@ const NewAdmin: React.FC = () => {
     };
 
     return (
-        <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md ">
+        <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
             {loading && <Spinner visible onHide={() => setLoading(false)} />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900/80 p-4">Create New System Administrator</h2>
-                <Button label="Back" icon="pi pi-arrow-left" className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300" onClick={handleBack} />
+                <Button
+                    label="Back"
+                    icon="pi pi-arrow-left"
+                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
+                    onClick={handleBack}
+                />
             </div>
             <div className="space-y-4 p-4">
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
+                    <div className="p-field">
+                        <Uploader
+                            onUploadSuccess={(meta) => setUploaded(meta)}
+                            chooseLabel="Drag & Drop or Click to Upload Profile Picture"
+                            dropboxFolder="/habnajschools"
+                        />
+                    </div>
                     <div className="p-field">
                         <label htmlFor="email">Email Address</label>
                         <Controller
@@ -115,7 +134,24 @@ const NewAdmin: React.FC = () => {
                         />
                         {errors.email && <small className="p-error">{errors.email.message}</small>}
                     </div>
-
+                    <div className="p-field">
+                        <label htmlFor="username">Username</label>
+                        <Controller
+                            name="username"
+                            control={control}
+                            render={({ field }) => (
+                                <InputText
+                                    {...field}
+                                    id="username"
+                                    type="text"
+                                    placeholder="Enter username"
+                                    className={errors.username ? 'p-invalid' : ''}
+                                    autoComplete="username"
+                                />
+                            )}
+                        />
+                        {errors.username && <small className="p-error">{errors.username.message}</small>}
+                    </div>
                     <div className="p-field">
                         <label htmlFor="role">Role</label>
                         <Controller
@@ -153,7 +189,7 @@ const NewAdmin: React.FC = () => {
                 </form>
             </div>
         </section>
-    )
+    );
 };
 
 export default NewAdmin;

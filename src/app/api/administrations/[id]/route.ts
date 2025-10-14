@@ -34,6 +34,8 @@ export async function GET(
                 email: true,
                 role: true,
                 active: true,
+                username: true,
+                avarta: true,
                 createdAt: true,
                 updatedAt: true,
                 _count: { select: { notifications: true } }
@@ -69,7 +71,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, administrationUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { email, password, role, active } = bodyValidation.data!;
+        const { email, password, role, active, username, avatar } = bodyValidation.data!;
 
         // Check for email conflicts
         if (email) {
@@ -98,6 +100,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (role) updateData.role = role;
         if (active !== undefined) updateData.active = active;
         if (password) updateData.password = await bcrypt.hash(password, 12);
+        if (username !== undefined) updateData.username = username;
+        if (avatar !== undefined) updateData.avarta = avatar;
 
         const updatedAdmin = await prisma.administration.update({
             where: { id },
@@ -107,6 +111,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 email: true,
                 role: true,
                 active: true,
+                username: true,
+                avarta: true,
                 createdAt: true,
                 updatedAt: true
             }

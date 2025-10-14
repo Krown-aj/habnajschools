@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import Image from "next/image";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Toast } from "primereact/toast";
 import { Badge } from "primereact/badge";
 import { Button } from "primereact/button";
 import { TabView, TabPanel } from "primereact/tabview";
 import moment from "moment";
+import ImageView, { UploadResult } from "@/components/ImageView/ImageView";
 
 type StudentProps = {
     title?: string;
@@ -61,10 +61,32 @@ const Student: React.FC<StudentProps> = () => {
 
     const handleBack = () => router.back();
 
-    // Fallbacks:
-    // - online placeholder (gravatar mp silhouette)
-    // - final fallback to a public asset: /assets/profile1.png (place file in public/assets/)
-    const resolveImageSrc = (avarta: any) => {
+    // Determine whether avarta is a Dropbox path (leading slash) or an external URL
+    const deriveDropboxPath = (avarta: any): string | null => {
+        if (!avarta) return null;
+
+        // object with url
+        if (typeof avarta === "object" && typeof avarta.url === "string") {
+            const p = normalize(avarta.url);
+            return p.startsWith("/") ? p : null;
+        }
+
+        if (typeof avarta === "string") {
+            if (/^https?:\/\//i.test(avarta) || avarta.startsWith("data:")) return null;
+            // treat as relative/local path -> normalize to leading slash and treat as Dropbox path
+            const p = normalize(avarta);
+            return p.startsWith("/") ? p : null;
+        }
+
+        return null;
+
+        function normalize(p: string) {
+            const cleaned = p.replace(/^(\.\/|\.\.\/)+/, "");
+            return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
+        }
+    };
+
+    const resolveImageSrcFallback = (avarta: any) => {
         const onlinePlaceholder = `https://www.gravatar.com/avatar/?d=mp&s=128`; // generic silhouette
         const publicFallback = "/assets/profile1.png";
 
@@ -76,21 +98,55 @@ const Student: React.FC<StudentProps> = () => {
         }
 
         if (typeof avarta === "string") {
-            // external full URL or data URL
             if (/^https?:\/\//i.test(avarta) || avarta.startsWith("data:")) return avarta;
-            // local path — normalize to ensure leading slash; if it looks like a src import path, fall back to public asset
             return normalize(avarta);
         }
 
         return onlinePlaceholder;
 
         function normalize(p: string) {
-            const cleaned = p.replace(/^(?:\.\.\/|\.\/)+/, "");
-            // if path references source files (src/ or assets/), it won't be a valid public URL — return public fallback
+            const cleaned = p.replace(/^(\.\/|\.\.\/)+/, "");
             if (!cleaned || cleaned.startsWith("src/") || cleaned.startsWith("assets/")) return publicFallback;
             return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
         }
     };
+
+    // Handle update coming back from ImageView (after successful upload)
+    const handleAvatarChange = useCallback(
+        async (meta: UploadResult) => {
+            setStudentData((prev: any) => ({ ...prev, avarta: meta.path }));
+
+            if (!studentId) {
+                toast.current?.show({ severity: "warn", summary: "Warning", detail: "No student ID to save avatar." });
+                return;
+            }
+
+            setLoading(true);
+            try {
+                const res = await fetch(`/api/students/${studentId}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ avarta: meta.path }),
+                });
+                let json: any = {};
+                try { json = await res.json(); } catch { }
+
+                if (!res.ok) {
+                    const msg = json?.error || `Failed to save avatar (status ${res.status})`;
+                    throw new Error(msg);
+                }
+
+                toast.current?.show({ severity: "success", summary: "Saved", detail: "Avatar updated successfully." });
+                return json;
+            } catch (err: any) {
+                toast.current?.show({ severity: "error", summary: "Save failed", detail: err.message || String(err) });
+                throw err;
+            } finally {
+                setLoading(false);
+            }
+        },
+        [studentId]
+    );
 
     if (loading) {
         return (
@@ -102,8 +158,8 @@ const Student: React.FC<StudentProps> = () => {
         );
     }
 
-    const imageSrc = resolveImageSrc(studentData?.avarta);
-    const imageIsExternal = typeof imageSrc === "string" && /^https?:\/\//i.test(imageSrc);
+    const imageDropboxPath = deriveDropboxPath(studentData?.avarta);
+    const fallbackImageSrc = resolveImageSrcFallback(studentData?.avarta);
 
     return (
         <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 p-4 sm:p-6 lg:p-12">
@@ -111,15 +167,28 @@ const Student: React.FC<StudentProps> = () => {
                 <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-indigo-50 shadow-sm text-indigo-600 overflow-hidden">
-                            <Image
-                                src={imageSrc as any}
-                                alt={studentData?.firstname ? `${studentData.firstname}'s profile` : "profile"}
-                                width={64}
-                                height={64}
-                                className="object-cover"
-                                // allow unoptimized for external placeholders / urls to avoid next.config changes
-                                unoptimized={imageIsExternal}
-                            />
+                            {imageDropboxPath ? (
+                                <ImageView
+                                    path={imageDropboxPath}
+                                    onChange={handleAvatarChange}
+                                    placeholder={typeof fallbackImageSrc === "string" ? fallbackImageSrc : "/assets/profile1.png"}
+                                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl"
+                                    width={64}
+                                    height={64}
+                                    alt={studentData?.firstname ? `${studentData.firstname}'s profile` : "profile"}
+                                    editable={true}
+                                />
+                            ) : (
+                                <ImageView
+                                    path={null}
+                                    placeholder={typeof fallbackImageSrc === "string" ? fallbackImageSrc : "/assets/profile1.png"}
+                                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl"
+                                    width={64}
+                                    height={64}
+                                    alt={studentData?.firstname ? `${studentData.firstname}'s profile` : "profile"}
+                                    editable={false}
+                                />
+                            )}
                         </div>
 
                         <div>
@@ -141,7 +210,6 @@ const Student: React.FC<StudentProps> = () => {
                     </div>
                 </header>
 
-                {/* Quick jump buttons */}
                 <div className="flex gap-2 justify-end mb-4">
                     <Button onClick={() => setActiveIndex(0)} className="w-auto px-3 py-1 rounded-full" outlined={activeIndex !== 0} label="Personal Data" />
                     <Button onClick={() => setActiveIndex(1)} className="w-auto px-3 py-1 rounded-full" outlined={activeIndex !== 1} label="Attendance" />

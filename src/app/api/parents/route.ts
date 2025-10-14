@@ -49,6 +49,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 state: true,
                 lga: true,
                 address: true,
+                avarta: true,
                 active: true,
                 createdAt: true,
                 updatedAt: true,
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const bodyValidation = await validateRequestBody(request, parentSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, email, phone, address, password, active } = bodyValidation.data!;
+        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, email, phone, address, password, active, avarta } = bodyValidation.data!;
 
         // Check if email or phone already exists
         const existingParent = await prisma.parent.findFirst({
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 email,
                 phone,
                 address,
+                avarta,
                 password: hashedPassword,
                 active
             },
@@ -131,6 +133,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 religion: true,
                 state: true,
                 lga: true,
+                avarta: true,
                 address: true,
                 active: true,
                 createdAt: true,

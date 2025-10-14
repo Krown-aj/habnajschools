@@ -13,6 +13,7 @@ import { Toast } from "primereact/toast";
 
 import { parentSchema, ParentSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
+import Uploader from "@/components/Uploader/Uploader";
 
 // Define option interface
 interface Option {
@@ -63,6 +64,7 @@ const NewParent: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [states, setStates] = useState<Option[]>([]);
     const [lgas, setLgas] = useState<Option[]>([]);
+    const [uploaded, setUploaded] = useState<{ path: string; id: string; url?: string | null } | null>(null);
 
     const {
         register,
@@ -89,6 +91,7 @@ const NewParent: React.FC = () => {
             state: "",
             lga: "",
             address: "",
+            avarta: "",
             active: true,
         },
     });
@@ -203,7 +206,8 @@ const NewParent: React.FC = () => {
         try {
             const payload = {
                 ...data,
-                // Only include password if provided
+                avarta: uploaded ? uploaded.path : null,
+                // Only include password if provided 
                 ...(data.password && { password: data.password }),
             };
             const res = await fetch("/api/parents", {
@@ -254,7 +258,13 @@ const NewParent: React.FC = () => {
             </div>
             <div className="space-y-4 p-4">
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
-                    {/* Title field */}
+                    <div className="p-field">
+                        <Uploader
+                            onUploadSuccess={(meta) => setUploaded(meta)}
+                            chooseLabel="Drag & Drop or Click to Upload Profile Picture"
+                            dropboxFolder="/habnajschools"
+                        />
+                    </div>
                     <div className="p-field">
                         <label htmlFor="title">Title</label>
                         <Controller
@@ -462,7 +472,6 @@ const NewParent: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
                         <Button
                             label="Cancel"

@@ -56,6 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 religion: true,
                 state: true,
                 lga: true,
+                avarta: true,
                 address: true,
                 active: true,
                 students: {
@@ -116,7 +117,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, parentUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, email, phone, address, password, active } = bodyValidation.data!;
+        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, email, phone, address, password, active, avarta } = bodyValidation.data!;
 
         // Check for email or phone conflicts
         if (email || phone) {
@@ -154,6 +155,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (address) updateData.address = address;
         if (password) updateData.password = await bcrypt.hash(password, 12);
         if (active !== undefined && userRole !== UserRole.PARENT) updateData.active = active;
+        if (avarta !== undefined) updateData.avarta = avarta;
 
         const updatedParent = await prisma.parent.update({
             where: { id: id },
@@ -174,6 +176,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 state: true,
                 lga: true,
                 address: true,
+                avarta: true,
                 active: true,
                 createdAt: true,
                 updatedAt: true

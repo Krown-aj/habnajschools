@@ -116,11 +116,11 @@ const Navbar = ({ onMobileMenuToggle }: NavbarProps) => {
     );
 
     const settingsItems = [
-        { icon: User, label: 'My Profile', href: `${role}/settings/profile` },
-        { icon: Shield, label: 'Security', href: `/${role}/settings/security` },
+        { icon: User, label: 'My Profile', href: `/dashboard/${role}/settings/profile` },
+        { icon: Shield, label: 'Security', href: `/dashboard/${role}/settings/security` },
         { icon: HelpCircle, label: 'Help & Support', href: '/dashboard/help' },
 
-        /*  { icon: Settings, label: 'Preferences', href: `/${role}/settings/preferences` },
+        /*  { icon: Settings, label: 'Preferences', href: `/${role}/settings/preferences` super/settings/profile },
          { icon: Palette, label: 'Appearance', href: `/${role}/settings/appearance` },
          { icon: Database, label: 'Privacy', href: `/${role}/settings/privacy` },
          ...(role === 'super' || role === 'admin' ? [

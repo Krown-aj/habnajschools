@@ -161,13 +161,13 @@ const menuItems = [
                 href: (role: string) => `/dashboard/${role}/settings/grading-policies`,
                 visible: ['admin', 'super',]
             },
+            {
+                icon: User,
+                label: 'Profile',
+                href: (role: string) => `/dashboard/${role}/settings/profile`,
+                visible: ['admin', 'super', 'teacher', 'student', 'parent']
+            },
             /*  {
-                 icon: User,
-                 label: 'Profile',
-                 href: (role: string) => `/dashboard/${role}/settings/profile`,
-                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
-             },
-             {
                  icon: Settings,
                  label: 'Preferences',
                  href: (role: string) => `/dashboard/${role}/settings/preferences`,

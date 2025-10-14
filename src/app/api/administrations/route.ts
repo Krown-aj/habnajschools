@@ -25,6 +25,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             select: {
                 id: true,
                 email: true,
+                avarta: true,
+                username: true,
                 role: true,
                 active: true,
                 createdAt: true,
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const bodyValidation = await validateRequestBody(request, administrationSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { email, password, role, active } = bodyValidation.data!;
+        const { email, password, role, active, username, avatar } = bodyValidation.data!;
 
         // Check if email already exists
         const existingUser = await prisma.administration.findUnique({
@@ -69,13 +71,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 email,
                 password: hashedPassword,
                 role,
-                active
+                active,
+                username,
+                avarta: avatar
             },
             select: {
                 id: true,
                 email: true,
                 role: true,
                 active: true,
+                username: true,
+                avarta: true,
                 createdAt: true,
                 updatedAt: true
             }

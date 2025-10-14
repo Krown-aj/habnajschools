@@ -19,6 +19,7 @@ model Administration {
   email         String         @unique
   password      String?
   username      String?
+  avarta        String?
   role          Roles
   active        Boolean        @default(true)
   createdAt     DateTime       @default(now())
@@ -110,6 +111,7 @@ model Parent {
   phone         String         @unique
   address       String
   password      String?
+  avarta        String?
   active        Boolean        @default(true)
   students      Student[]
   notifications Notification[]

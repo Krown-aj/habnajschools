@@ -12,6 +12,8 @@ export const passwordSchema = z.string().min(6);
 export const administrationSchema = z.object({
     email: emailSchema,
     password: passwordSchema.optional(),
+    username: z.string().optional(),
+    avatar: z.string().optional(),
     role: z.nativeEnum(Roles),
     active: z.boolean().default(true)
 });
@@ -81,6 +83,7 @@ export const parentSchema = z.object({
     lga: z.string().min(1, { message: "LGA is required!" }),
     email: emailSchema,
     phone: phoneSchema,
+    avarta: z.string().optional(),
     address: z.string().min(1, { message: "Address is required!" }),
     password: passwordSchema.optional(),
     active: z.boolean().default(true)
