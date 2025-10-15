@@ -91,7 +91,7 @@ const NewParent: React.FC = () => {
             state: "",
             lga: "",
             address: "",
-            avarta: "",
+            password: "password",
             active: true,
         },
     });
@@ -207,8 +207,7 @@ const NewParent: React.FC = () => {
             const payload = {
                 ...data,
                 avarta: uploaded ? uploaded.path : null,
-                // Only include password if provided 
-                ...(data.password && { password: data.password }),
+                password: data.password || "password",
             };
             const res = await fetch("/api/parents", {
                 method: "POST",

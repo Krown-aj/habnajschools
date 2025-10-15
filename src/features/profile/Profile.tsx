@@ -14,7 +14,6 @@ import profilePic from "@/assets/profile1.png";
 
 type Role = "super" | "admin" | "teacher" | "student" | "parent" | "Guest" | string;
 
-// Define title options for dropdown
 const titleOptions = [
     { label: "Mr.", value: "Mr." },
     { label: "Mrs.", value: "Mrs." },
@@ -24,13 +23,11 @@ const titleOptions = [
     { label: "Engr.", value: "Engr." },
 ];
 
-// Define gender options for dropdown
 const genderOptions = [
     { label: "Male", value: "MALE" },
     { label: "Female", value: "FEMALE" },
 ];
 
-// Define qualification options for dropdown
 const qualificationOptions = [
     { label: "NCE", value: "NCE" },
     { label: "OND/ND", value: "OND/ND" },
@@ -66,7 +63,6 @@ export default function Profile() {
     const [editMode, setEditMode] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // derive endpoint
     const profileEndpoint = useMemo(() => {
         if (!userId) return null;
         const r = String(role).toLowerCase();
@@ -77,7 +73,6 @@ export default function Profile() {
         return `/api/students/${userId}`;
     }, [role, userId]);
 
-    // helpers for dates
     const formatDateForInput = (d?: string | Date) => {
         if (!d) return "";
         const date = new Date(d);
@@ -92,39 +87,45 @@ export default function Profile() {
         return new Date(d).toLocaleDateString();
     };
 
-    // flatten profile => default form values
-    const shapeToDefaults = (p: any) => ({
-        title: p?.title ?? "",
-        qualification: p?.qualification ?? "",
-        username: p?.username ?? "",
-        firstname: p?.firstname ?? "",
-        othername: p?.othername ?? "",
-        surname: p?.surname ?? "",
-        birthday: p?.birthday ? new Date(p.birthday) : null,
-        gender: p?.gender ?? null,
-        bloodgroup: p?.bloodgroup ?? "",
-        email: p?.email ?? "",
-        phone: p?.phone ?? "",
-        address: p?.address ?? "",
-        state: p?.state ?? "",
-        lga: p?.lga ?? "",
-        avarta: p?.avarta ?? "",
-    });
+    // only include qualification when role === "teacher"
+    const shapeToDefaults = (p: any, r?: Role) => {
+        const base: any = {
+            title: p?.title ?? "",
+            username: p?.username ?? "",
+            firstname: p?.firstname ?? "",
+            othername: p?.othername ?? "",
+            surname: p?.surname ?? "",
+            birthday: p?.birthday ? new Date(p.birthday) : null,
+            gender: p?.gender ?? null,
+            bloodgroup: p?.bloodgroup ?? "",
+            email: p?.email ?? "",
+            phone: p?.phone ?? "",
+            address: p?.address ?? "",
+            state: p?.state ?? "",
+            lga: p?.lga ?? "",
+            avarta: p?.avarta ?? "",
+        };
 
-    // react-hook-form setup
+        if (String(r).toLowerCase() === "teacher") {
+            base.qualification = p?.qualification ?? "";
+        }
+
+        return base;
+    };
+
     const {
         control,
-        register,
         handleSubmit,
         reset,
-        formState: { errors, isDirty },
-        watch,
+        formState: { errors },
     } = useForm({
         mode: "onBlur",
-        defaultValues: shapeToDefaults({}),
+        defaultValues: shapeToDefaults({}, role),
     });
 
-    // fetch profile from server
+    // Helper to safely access errors by string key (avoids TS2538)
+    const getError = (key: string) => (errors as any)[key];
+
     const fetchProfile = useCallback(async () => {
         if (!profileEndpoint) return;
         setLoadingProfile(true);
@@ -137,21 +138,19 @@ export default function Profile() {
             const data = await res.json();
             const payload = data?.data ?? data ?? {};
             setProfile(payload);
-            // only reset the form when not currently editing 
-            reset(shapeToDefaults(payload));
+            reset(shapeToDefaults(payload, role));
         } catch (err: any) {
             console.error("fetchProfile error", err);
             toast.current?.show({ severity: "error", summary: "Profile", detail: err?.message || "Failed to load profile" });
         } finally {
             setLoadingProfile(false);
         }
-    }, [profileEndpoint, reset]);
+    }, [profileEndpoint, reset, role]);
 
     useEffect(() => {
         if (!isSessionLoading && profileEndpoint) fetchProfile();
     }, [isSessionLoading, profileEndpoint, fetchProfile]);
 
-    // save profile patch
     const saveProfile = useCallback(
         async (patch: Record<string, any>) => {
             if (!profileEndpoint) throw new Error("No profile endpoint");
@@ -173,8 +172,7 @@ export default function Profile() {
                 const updated = json?.data ?? json ?? {};
                 const newProfile = Object.keys(updated).length ? updated : { ...(profile ?? {}), ...patch };
                 setProfile(newProfile);
-                // reset form to server truth to remove dirty state
-                reset(shapeToDefaults(newProfile));
+                reset(shapeToDefaults(newProfile, role));
                 toast.current?.show({ severity: "success", summary: "Saved", detail: "Profile updated." });
                 return newProfile;
             } catch (err: any) {
@@ -185,10 +183,9 @@ export default function Profile() {
                 setSaving(false);
             }
         },
-        [profileEndpoint, profile, reset]
+        [profileEndpoint, profile, reset, role]
     );
 
-    // ImageView onChange will receive UploadResult and we patch avarta and await server update
     const handleAvatarChange = useCallback(
         async (meta: UploadResult) => {
             return saveProfile({ avarta: meta.path });
@@ -196,14 +193,10 @@ export default function Profile() {
         [saveProfile]
     );
 
-    // form submit handler: build role-appropriate patch and call saveProfile
     const onSubmit = async (vals: any) => {
-        // build patch: convert birthday Date to ISO if present
         const patch: Record<string, any> = {};
-        // role-specific fields — we only submit fields relevant to role (teacher/student/parent/admin)
-        // for simplicity include common profile fields:
-        if (vals.qualification !== undefined) patch.qualification = vals.qualification;
         if (vals.title !== undefined) patch.title = vals.title;
+        if (vals.qualification !== undefined && role === "teacher") patch.qualification = vals.qualification;
         if (vals.username !== undefined) patch.username = vals.username;
         if (vals.firstname !== undefined) patch.firstname = vals.firstname;
         if (vals.othername !== undefined) patch.othername = vals.othername;
@@ -228,14 +221,12 @@ export default function Profile() {
     const handleStartEdit = () => setEditMode(true);
     const handleCancel = () => {
         setEditMode(false);
-        reset(shapeToDefaults(profile ?? {}));
+        reset(shapeToDefaults(profile ?? {}, role));
     };
 
-    // role-specific fields to render (gender dropdown, bloodgroup dropdown, title dropdown included)
     const fieldsByRole = (r: Role) => {
         const common = [
             { key: "title", label: "Title", type: "select" },
-            { key: "qualification", label: "Qualification", type: "select", required: true },
             { key: "firstname", label: "First name", type: "text", required: true },
             { key: "othername", label: "Other name", type: "text" },
             { key: "surname", label: "Surname", type: "text", required: true },
@@ -251,14 +242,16 @@ export default function Profile() {
 
         switch (String(r).toLowerCase()) {
             case "teacher":
-                return common;
+                return [
+                    ...common,
+                    { key: "qualification", label: "Qualification", type: "select", required: true },
+                ];
             case "student":
                 return common;
             case "parent":
                 return common;
             case "super":
             case "admin":
-                // admin has fewer personal fields — still show email & phone
                 return [
                     { key: "email", label: "Email", type: "email", required: true },
                     { key: "username", label: "Username", type: "text" },
@@ -268,11 +261,10 @@ export default function Profile() {
         }
     };
 
-    // avatar info for ImageView
     const avatarPath = typeof profile?.avarta === "string" && profile.avarta.startsWith("/") ? profile.avarta : undefined;
-    const avatarPlaceholder = profile?.avarta && typeof profile.avarta === "string" && /^https?:\/\//i.test(profile.avarta) ? profile.avarta : profilePic;
+    const avatarPlaceholder =
+        profile?.avarta && typeof profile.avarta === "string" && /^https?:\/\//i.test(profile.avarta) ? profile.avarta : profilePic;
 
-    // UX while loading
     if (isSessionLoading || loadingProfile) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -308,7 +300,6 @@ export default function Profile() {
             <Toast ref={toast} />
             <div className="max-w-3xl mx-auto">
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    {/* Avatar center */}
                     <div className="flex flex-col items-center">
                         <div className="relative" style={{ overflow: "visible", paddingBottom: 18 }}>
                             <div className="w-40 h-40 rounded-full overflow-hidden">
@@ -342,13 +333,13 @@ export default function Profile() {
                         </div>
                     </div>
 
-                    {/* Form / Details */}
                     <div className="mt-6">
                         <div className="bg-gray-50 rounded-lg border border-gray-100 p-4">
                             <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {roleFields.map((f) => {
                                     // non-edit display mode
                                     if (!editMode) {
+                                        // only render qualification for teacher because fieldsByRole will only include it for teacher
                                         return (
                                             <div key={f.key} className="py-2">
                                                 <div className="text-xs text-gray-600 font-bold">{f.label}</div>
@@ -359,10 +350,15 @@ export default function Profile() {
                                         );
                                     }
 
-                                    // edit mode: render appropriate controlled input
+                                    // edit mode
+                                    const fieldError = getError(f.key);
+
                                     return (
                                         <div key={f.key} className="py-2">
-                                            <div className="text-xs text-gray-600 font-medium mb-1">{f.label}{f.required ? " *" : ""}</div>
+                                            <div className="text-xs text-gray-600 font-medium mb-1">
+                                                {f.label}
+                                                {f.required ? " *" : ""}
+                                            </div>
 
                                             {f.type === "select" && f.key === "title" && (
                                                 <Controller
@@ -375,7 +371,7 @@ export default function Profile() {
                                                             options={titleOptions}
                                                             onChange={(e) => field.onChange(e.value)}
                                                             placeholder="Select title"
-                                                            className={errors.title ? "p-invalid w-full" : "w-full"}
+                                                            className={getError("title") ? "p-invalid w-full" : "w-full"}
                                                         />
                                                     )}
                                                 />
@@ -392,7 +388,7 @@ export default function Profile() {
                                                             options={qualificationOptions}
                                                             onChange={(e) => field.onChange(e.value)}
                                                             placeholder="Select qualification"
-                                                            className={errors.qualification ? "p-invalid w-full" : "w-full"}
+                                                            className={getError("qualification") ? "p-invalid w-full" : "w-full"}
                                                         />
                                                     )}
                                                 />
@@ -409,7 +405,7 @@ export default function Profile() {
                                                             options={genderOptions}
                                                             onChange={(e) => field.onChange(e.value)}
                                                             placeholder="Select gender"
-                                                            className={errors.gender ? "p-invalid w-full" : "w-full"}
+                                                            className={getError("gender") ? "p-invalid w-full" : "w-full"}
                                                         />
                                                     )}
                                                 />
@@ -425,7 +421,7 @@ export default function Profile() {
                                                             options={bloodgroupOptions}
                                                             onChange={(e) => field.onChange(e.value)}
                                                             placeholder="Select blood group"
-                                                            className={errors.bloodgroup ? "p-invalid w-full" : "w-full"}
+                                                            className={getError("bloodgroup") ? "p-invalid w-full" : "w-full"}
                                                         />
                                                     )}
                                                 />
@@ -442,7 +438,7 @@ export default function Profile() {
                                                             onChange={(e) => field.onChange(e.value)}
                                                             dateFormat="dd/mm/yy"
                                                             placeholder="Select Date"
-                                                            className={errors.birthday ? "p-invalid w-full" : "w-full"}
+                                                            className={getError("birthday") ? "p-invalid w-full" : "w-full"}
                                                         />
                                                     )}
                                                 />
@@ -454,56 +450,55 @@ export default function Profile() {
                                                     name={f.key as any}
                                                     rules={{}}
                                                     render={({ field }) => (
-                                                        <InputTextarea rows={3} value={field.value ?? ""} onChange={(e) => field.onChange((e.target as HTMLTextAreaElement).value)} className={errors[f.key as keyof typeof errors] ? "p-invalid w-full" : "w-full"} />
+                                                        <InputTextarea
+                                                            rows={3}
+                                                            value={field.value ?? ""}
+                                                            onChange={(e) => field.onChange((e.target as HTMLTextAreaElement).value)}
+                                                            className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                        />
                                                     )}
                                                 />
                                             )}
 
                                             {(f.type === "text" || f.type === "email") && (
-                                                <>
-                                                    <Controller
-                                                        control={control}
-                                                        name={f.key as any}
-                                                        rules={{
-                                                            required: f.required ? `${f.label} is required` : false,
-                                                            ...(f.type === "email"
-                                                                ? {
-                                                                    pattern: {
-                                                                        value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/i,
-                                                                        message: "Invalid email address",
-                                                                    },
-                                                                }
-                                                                : {}),
-                                                            ...(f.key === "phone"
-                                                                ? {
-                                                                    minLength: { value: 7, message: "Phone is too short" },
-                                                                    maxLength: { value: 20, message: "Phone is too long" },
-                                                                }
-                                                                : {}),
-                                                        }}
-                                                        render={({ field }) => (
-                                                            <InputText
-                                                                value={field.value ?? ""}
-                                                                onChange={(e) => field.onChange((e.target as HTMLInputElement).value)}
-                                                                type={f.type === "email" ? "email" : "text"}
-                                                                className={errors[f.key as keyof typeof errors] ? "p-invalid w-full" : "w-full"}
-                                                            />
-                                                        )}
-                                                    />
-                                                </>
+                                                <Controller
+                                                    control={control}
+                                                    name={f.key as any}
+                                                    rules={{
+                                                        required: f.required ? `${f.label} is required` : false,
+                                                        ...(f.type === "email"
+                                                            ? {
+                                                                pattern: {
+                                                                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/i,
+                                                                    message: "Invalid email address",
+                                                                },
+                                                            }
+                                                            : {}),
+                                                        ...(f.key === "phone"
+                                                            ? {
+                                                                minLength: { value: 7, message: "Phone is too short" },
+                                                                maxLength: { value: 20, message: "Phone is too long" },
+                                                            }
+                                                            : {}),
+                                                    }}
+                                                    render={({ field }) => (
+                                                        <InputText
+                                                            value={field.value ?? ""}
+                                                            onChange={(e) => field.onChange((e.target as HTMLInputElement).value)}
+                                                            type={f.type === "email" ? "email" : "text"}
+                                                            className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                        />
+                                                    )}
+                                                />
                                             )}
 
-                                            {/* show validation message */}
-                                            {errors[f.key as keyof typeof errors] && (
-                                                <small className="p-error">{(errors[f.key as keyof typeof errors] as any)?.message}</small>
-                                            )}
+                                            {fieldError && <small className="p-error">{(fieldError as any)?.message}</small>}
                                         </div>
                                     );
                                 })}
                             </form>
                         </div>
 
-                        {/* role-specific extras */}
                         <div className="mt-4 bg-white rounded-lg border border-gray-100 p-4">
                             {role === "student" && (
                                 <>

@@ -8,6 +8,7 @@ import { TrendingUp } from "lucide-react";
 import CountChartContainer from "@/components/Charts/CountChartContainer";
 import EventCalendarContainer from "@/components/Calendar/EventCalendarContainer";
 import Announcements from "@/components/Events/Announcements";
+import ImageView from "@/components/ImageView/ImageView";
 
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
@@ -40,7 +41,6 @@ const Parent = () => {
         return new URLSearchParams();
     }, []);
 
-    // guard to avoid duplicate fetches
     const fetchedRef = useRef(false);
 
     const fetchStudents = useCallback(async () => {
@@ -97,7 +97,8 @@ const Parent = () => {
         return Object.entries(map).map(([gender, count]) => ({ gender, _count: { _all: count } }));
     }, [students]);
 
-    // small renderers for DataTable
+    // Renderers for DataTable
+
     const nameBody = (row: StudentPreview) =>
         `${row.firstname ?? ""} ${row.othername ? row.othername + " " : ""}${row.surname ?? ""}`.trim();
 
@@ -106,21 +107,21 @@ const Parent = () => {
         const displayName = `${row.firstname ?? ""} ${row.surname ?? ""}`.trim() || "Student";
         const placeholder = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0D8ABC&color=fff&size=128`;
 
-        // If avarta exists, try that first; otherwise use the placeholder
-        const src = row.avarta && row.avarta.trim() !== "" ? row.avarta : placeholder;
+        // If avarta exists use it, otherwise undefined so ImageView uses placeholder prop
+        const avatarPath = row.avarta && row.avarta.trim() !== "" ? row.avarta : undefined;
 
         return (
-            <img
-                src={src}
-                alt={displayName}
-                className="w-10 h-10 rounded-full object-cover"
-                loading="lazy"
-                onError={(e) => {
-                    // If the image fails to load (broken avarta), fall back to the generated placeholder
-                    const target = e.currentTarget as HTMLImageElement;
-                    if (target.src !== placeholder) target.src = placeholder;
-                }}
-            />
+            <div className="w-10 h-10 rounded-full overflow-hidden">
+                <ImageView
+                    path={avatarPath}
+                    placeholder={placeholder}
+                    className="w-10 h-10 rounded-full object-cover"
+                    width={40}
+                    height={40}
+                    alt={displayName}
+                    editable={false}
+                />
+            </div>
         );
     };
 
@@ -160,6 +161,11 @@ const Parent = () => {
 
     const parentName = `${(session.user as any)?.firstname ?? ""} ${(session.user as any)?.surname ?? ""}`.trim() || `${session.user?.name}`;
 
+    // pluralization for children count line
+    const childrenCountText = students.length === 1
+        ? `You have 1 child in this school.`
+        : `You have ${students.length} children in this school.`;
+
     return (
         <section className="p-4 lg:p-6 min-h-screen bg-gray-50">
             <div className="max-w-7xl mx-auto">
@@ -187,7 +193,7 @@ const Parent = () => {
                         {/* STUDENTS TABLE (preview) */}
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <div className="mb-4">
-                                <p className="text-sm text-gray-500">You have {students.length} children in this school.</p>
+                                <p className="text-sm text-gray-500">{childrenCountText}</p>
                             </div>
 
                             <div className="w-full">
@@ -196,8 +202,6 @@ const Parent = () => {
                                     <Column field="admissionnumber" header="Admission" sortable />
                                     <Column header="Name" body={nameBody} sortable />
                                     <Column field="class.name" header="Class" body={(row: StudentPreview) => row.class?.name ?? "Not assigned"} sortable />
-                                    <Column field="gender" header="Gender" sortable />
-                                    <Column field="birthday" header="Birthday" body={(row: StudentPreview) => (row.birthday ? new Date(row.birthday).toLocaleDateString() : "")} />
                                 </DataTable>
                             </div>
                         </div>
