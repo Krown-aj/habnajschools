@@ -42,11 +42,12 @@ model Student {
   email              String?             @unique
   phone              String?             @unique
   address            String
-  state              String
-  lga                String
+  state              String?
+  lga                String?
   avarta             String?
   password           String?
   active             Boolean             @default(true)
+  section            String?
   parentid           String
   parent             Parent              @relation(fields: [parentid], references: [id])
   classid            String
@@ -76,14 +77,15 @@ model Teacher {
   bloodgroup    String?
   gender        UserSex
   qualification String?
-  state         String
-  lga           String
+  state         String?
+  lga           String?
   email         String         @unique
   phone         String?        @unique
   address       String
   avarta        String?
   password      String?
   active        Boolean        @default(true)
+  section       String?
   subjects      Subject[]
   classes       Class[]
   lessons       Lesson[]
@@ -102,14 +104,14 @@ model Parent {
   othername     String?
   birthday      DateTime?
   bloodgroup    String?
-  gender        UserSex
-  occupation    String
-  religion      String
-  state         String
-  lga           String
-  email         String         @unique
+  gender        UserSex?
+  occupation    String?
+  religion      String?
+  state         String?
+  lga           String?
+  email         String?        @unique
   phone         String         @unique
-  address       String
+  address       String?
   password      String?
   avarta        String?
   active        Boolean        @default(true)

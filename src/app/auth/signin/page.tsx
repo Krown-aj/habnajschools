@@ -20,10 +20,7 @@ import Footer from "@/components/ui/footer/footer";
 
 // Validation schema
 const signInSchema = z.object({
-    email: z
-        .string()
-        .min(1, "Email is required")
-        .email("Please enter a valid email address"),
+    username: z.string().min(1, "Username is required"),
     password: z
         .string()
         .min(1, "Password is required")
@@ -33,7 +30,7 @@ const signInSchema = z.object({
 type SignInFormData = z.infer<typeof signInSchema>;
 
 const SignIn = () => {
-    const toast = useRef<Toast>(null);
+    const toast = useRef<Toast | null>(null);
     const router = useRouter();
 
     const {
@@ -43,53 +40,87 @@ const SignIn = () => {
     } = useForm<SignInFormData>({
         resolver: zodResolver(signInSchema),
         defaultValues: {
-            email: "",
+            username: "",
             password: "",
         },
-        mode: 'onBlur'
+        mode: "onBlur",
     });
+
+    /**
+     * Map server/client error code to a toast message object.
+     * PrimeReact Toast message object commonly accepts:
+     * { severity, summary, detail, life, icon }
+     */
+    const mapErrorToToast = (code?: string) => {
+        switch (code) {
+            case "inactive":
+                return {
+                    severity: "warn" as const,
+                    summary: "Account Inactive",
+                    detail: "Your account is inactive. Contact support if you believe this is an error.",
+                    life: 5000,
+                    icon: "pi pi-lock",
+                };
+            case "invalid_credentials":
+            case "CredentialsSignin": // next-auth default code for credential provider failure
+                return {
+                    severity: "error" as const,
+                    summary: "Invalid Credentials",
+                    detail: "Invalid username or password. Please check and try again.",
+                    life: 4000,
+                    icon: "pi pi-times",
+                };
+            case "server_error":
+            default:
+                return {
+                    severity: "error" as const,
+                    summary: "Server Error",
+                    detail: "Server error, please try again.",
+                    life: 5000,
+                    icon: "pi pi-exclamation-triangle",
+                };
+        }
+    };
 
     const onSubmit = async (data: SignInFormData) => {
         try {
             const result = await signIn("credentials", {
-                email: data.email,
+                username: data.username,
                 password: data.password,
                 redirect: false,
             });
 
+            // Handle known error responses from next-auth / authorize
             if (result?.error) {
-                //console.log('An error occured:', result.error)
-                toast.current?.show({
-                    severity: "error",
-                    summary: "Authentication Failed",
-                    detail: "Invalid email or password. Please check your credentials and try again.",
-                    life: 5000,
-                });
+                const errToast = mapErrorToToast(result.error);
+                toast.current?.show(errToast);
                 return;
             }
 
-            // Show success message
+            // Success
             toast.current?.show({
                 severity: "success",
                 summary: "Welcome!",
                 detail: "Sign in successful. Redirecting to your dashboard...",
-                life: 3000,
+                life: 2000,
+                icon: "pi pi-check",
             });
 
-            // Get session and redirect
+            // Acquire session and redirect by role
             const session = await getSession();
             if (session?.user?.role) {
+                // small delay so toast is visible briefly
                 setTimeout(() => {
                     router.push(`/dashboard/${session.user.role}`);
-                }, 1000);
+                }, 700);
+            } else {
+                // unexpected: session exists but no role
+                toast.current?.show(mapErrorToToast("server_error"));
             }
-        } catch (error) {
-            toast.current?.show({
-                severity: "error",
-                summary: "System Error",
-                detail: "An unexpected error occurred. Please try again later.",
-                life: 5000,
-            });
+        } catch (err) {
+            // Network / unexpected error
+            console.error("Sign in error:", err);
+            toast.current?.show(mapErrorToToast("server_error"));
         }
     };
 
@@ -132,7 +163,7 @@ const SignIn = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6 }}
                 >
-                    {/* Left Panel - Welcome Section */}
+                    {/* Left Panel */}
                     <motion.div
                         className="hidden lg:flex flex-col justify-center text-white space-y-6"
                         initial={{ opacity: 0, x: -30 }}
@@ -141,12 +172,7 @@ const SignIn = () => {
                     >
                         <div className="flex items-center gap-4 mb-8">
                             <div className="w-16 h-16 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                                <Image
-                                    src="/assets/logo.png"
-                                    alt="Habnaj International School"
-                                    width={40}
-                                    height={40}
-                                />
+                                <Image src="/assets/logo.png" alt="Habnaj International School" width={40} height={40} />
                             </div>
                             <div>
                                 <h1 className="text-3xl font-bold">Welcome</h1>
@@ -157,31 +183,16 @@ const SignIn = () => {
                         <div className="space-y-4">
                             <h2 className="text-4xl font-bold leading-tight">
                                 Continue Your
-                                <span className="block bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                                    Learning Journey
-                                </span>
+                                <span className="block bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">Learning Journey</span>
                             </h2>
                             <p className="text-xl text-blue-200 leading-relaxed">
-                                Access your personalized dashboard, track academic progress,
-                                connect with the academic environment, and explore new opportunities.
+                                Access your personalized dashboard, track academic progress, connect with the academic environment, and explore new opportunities.
                             </p>
                         </div>
 
-                        {/* Features */}
                         <div className="space-y-4">
-                            {[
-                                "📚 Access subjects and assignments",
-                                "📊 Track academic progress",
-                                "👥 Connect with teachers and students/pupils",
-                                "🎯 Achieve learning goals"
-                            ].map((feature, index) => (
-                                <motion.div
-                                    key={index}
-                                    className="flex items-center gap-3 text-blue-100"
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
-                                >
+                            {["📚 Access subjects and assignments", "📊 Track academic progress", "👥 Connect with teachers and students/pupils", "🎯 Achieve learning goals"].map((feature, index) => (
+                                <motion.div key={index} className="flex items-center gap-3 text-blue-100" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}>
                                     <div className="w-2 h-2 bg-yellow-400 rounded-full" />
                                     <span>{feature}</span>
                                 </motion.div>
@@ -190,63 +201,42 @@ const SignIn = () => {
                     </motion.div>
 
                     {/* Right Panel - Sign In Form */}
-                    <motion.div
-                        className="w-full max-w-md mx-auto"
-                        initial={{ opacity: 0, x: 30 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.8, delay: 0.3 }}
-                    >
+                    <motion.div className="w-full max-w-md mx-auto" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8, delay: 0.3 }}>
                         <Card className="px-4 lg:px-8 py-4 shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
                             <div className="text-center mb-4">
-                                <h2 className="text-3xl font-bold text-gray-800 mb-2">
-                                    Welcome!
-                                </h2>
-                                <p className="text-gray-600">
-                                    Enter your credentials to access your account
-                                </p>
+                                <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome!</h2>
+                                <p className="text-gray-600">Enter your credentials to access your account</p>
                             </div>
 
                             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                                {/* Email Field */}
+                                {/* Username Field */}
                                 <div className="space-y-2">
-                                    <label htmlFor="email" className="block text-sm font-semibold text-gray-700">
-                                        Email Address/Admission Number
-                                    </label>
+                                    <label htmlFor="email" className="block text-sm font-semibold text-gray-700">Username</label>
                                     <Controller
-                                        name="email"
+                                        name="username"
                                         control={control}
                                         render={({ field }) => (
                                             <InputText
                                                 {...field}
-                                                id="email"
-                                                type="email"
-                                                placeholder="Enter your email/admission number"
-                                                className={`w-full p-3 border-2 rounded-lg transition-all duration-300 ${errors.email
-                                                    ? 'p-invalid'
-                                                    : ''
-                                                    }`}
-                                                autoComplete="email"
+                                                id="username"
+                                                type="text"
+                                                placeholder="Enter your username"
+                                                className={`w-full p-3 border-2 rounded-lg transition-all duration-300 ${errors.username ? "p-invalid" : ""}`}
+                                                autoComplete="text"
                                             />
                                         )}
                                     />
-                                    {errors.email && (
-                                        <motion.p
-                                            className="text-red-500 text-sm flex items-center gap-1"
-                                            initial={{ opacity: 0, y: -10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ duration: 0.3 }}
-                                        >
+                                    {errors.username && (
+                                        <motion.p className="text-red-500 text-sm flex items-center gap-1" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
                                             <i className="pi pi-exclamation-circle" />
-                                            {errors.email.message}
+                                            {errors.username.message}
                                         </motion.p>
                                     )}
                                 </div>
 
                                 {/* Password Field */}
                                 <div className="space-y-2">
-                                    <label htmlFor="password" className="block text-sm font-semibold text-gray-700">
-                                        Password
-                                    </label>
+                                    <label htmlFor="password" className="block text-sm font-semibold text-gray-700">Password</label>
                                     <Controller
                                         name="password"
                                         control={control}
@@ -255,8 +245,7 @@ const SignIn = () => {
                                                 {...field}
                                                 id="password"
                                                 placeholder="Enter your password"
-                                                className={`w-full block ${errors.password ? 'p-invalid' : ''
-                                                    }`}
+                                                className={`w-full block ${errors.password ? "p-invalid" : ""}`}
                                                 inputClassName="w-full p-3 border-2 rounded-lg transition-all duration-300"
                                                 toggleMask
                                                 feedback={false}
@@ -265,12 +254,7 @@ const SignIn = () => {
                                         )}
                                     />
                                     {errors.password && (
-                                        <motion.p
-                                            className="text-red-500 text-sm flex items-center gap-1"
-                                            initial={{ opacity: 0, y: -10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ duration: 0.3 }}
-                                        >
+                                        <motion.p className="text-red-500 text-sm flex items-center gap-1" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
                                             <i className="pi pi-exclamation-circle" />
                                             {errors.password.message}
                                         </motion.p>
@@ -280,21 +264,10 @@ const SignIn = () => {
                                 {/* Remember Me & Forgot Password */}
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            id="remember"
-                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                        />
-                                        <label htmlFor="remember" className="text-sm text-gray-600">
-                                            Remember me
-                                        </label>
+                                        <input type="checkbox" id="remember" className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                                        <label htmlFor="remember" className="text-sm text-gray-600">Remember me</label>
                                     </div>
-                                    <Link
-                                        href="/auth/forgot-password"
-                                        className="text-sm text-blue-600 hover:text-blue-800 transition-colors duration-300"
-                                    >
-                                        Forgot password?
-                                    </Link>
+                                    <Link href="/auth/forgot-password" className="text-sm text-blue-600 hover:text-blue-800 transition-colors duration-300">Forgot password?</Link>
                                 </div>
 
                                 {/* Submit Button */}
@@ -308,15 +281,10 @@ const SignIn = () => {
                                 />
                             </form>
 
-                            <Divider align="center" className="my-6">
-                                <span className="text-gray-500 text-sm">OR</span>
-                            </Divider>
-                            {/* Back to Home */}
+                            <Divider align="center" className="my-6"><span className="text-gray-500 text-sm">OR</span></Divider>
+
                             <div className="text-center mt-6">
-                                <Link
-                                    href="/"
-                                    className="text-sm text-gray-600 hover:text-blue-600 transition-colors duration-300 flex items-center justify-center gap-1"
-                                >
+                                <Link href="/" className="text-sm text-gray-600 hover:text-blue-600 transition-colors duration-300 flex items-center justify-center gap-1">
                                     <i className="pi pi-arrow-left" />
                                     Back to Homepage
                                 </Link>

@@ -1,20 +1,14 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { FaCog, FaPlus, FaBell, FaEye, FaBook } from "react-icons/fa";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Dialog } from "primereact/dialog";
 import { Password } from "primereact/password";
 import { Button } from "primereact/button";
 import { Toast } from "primereact/toast";
 import { useForm, Controller } from "react-hook-form";
-
-type SecurityProps = {
-    title?: string;
-    subtitle?: string;
-    ctaLabel?: string;
-    showSidebar?: boolean;
-};
+import { motion } from "framer-motion";
+import { FaLock } from "react-icons/fa";
 
 type FormValues = {
     oldPassword: string;
@@ -22,17 +16,28 @@ type FormValues = {
     confirmPassword: string;
 };
 
-const Security: React.FC<SecurityProps> = ({
-    title = "Feature coming soon",
-    subtitle = "This section is currently being developed. Check back later or preview the layout.",
-    ctaLabel = "Get notified",
-    showSidebar = true,
-}) => {
+const PasswordStrengthBar: React.FC<{ score: number }> = ({ score }) => {
+    // score: 0..4
+    const width = `${(Math.max(0, Math.min(4, score)) / 4) * 100}%`;
+
+    return (
+        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-2">
+            <div className="h-2 rounded-full transition-all" style={{ width, background: "linear-gradient(90deg, rgba(99,102,241,1), rgba(16,185,129,1))" }} />
+            <div className="flex justify-between mt-2 text-xs text-gray-500">
+                <span className="capitalize">{score <= 1 ? "very weak" : score === 2 ? "weak" : score === 3 ? "good" : "strong"}</span>
+                <span>{Math.round((parseFloat(width) || 0))}%</span>
+            </div>
+        </div>
+    );
+};
+
+const SecurityOnlyChangePassword: React.FC = () => {
     const { data: session } = useSession();
     const toast = useRef<Toast | null>(null);
 
-    const [dialogVisible, setDialogVisible] = useState(false);
+    const [visible, setVisible] = useState(false);
     const [saving, setSaving] = useState(false);
+    const timerRef = useRef<number | null>(null);
 
     const {
         control,
@@ -42,206 +47,219 @@ const Security: React.FC<SecurityProps> = ({
         formState: { errors },
     } = useForm<FormValues>({
         mode: "onBlur",
-        defaultValues: {
-            oldPassword: "",
-            newPassword: "",
-            confirmPassword: "",
-        },
+        defaultValues: { oldPassword: "", newPassword: "", confirmPassword: "" },
     });
 
-    const today = new Date().toLocaleDateString();
+    const newPassword = watch("newPassword");
+    // Password strength scoring (simple heuristics)
+    const strengthScore = useMemo(() => {
+        const pass = newPassword || "";
+        let score = 0;
+        if (pass.length >= 8) score++;
+        if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score++;
+        if (/\d/.test(pass)) score++;
+        if (/[^A-Za-z0-9]/.test(pass)) score++;
+        return score; // 0..4
+    }, [newPassword]);
+
+    useEffect(() => {
+        // cleanup timer on unmount
+        return () => {
+            if (timerRef.current) {
+                window.clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+        };
+    }, []);
+
+    const mapResponseToToast = (opts?: { code?: string; status?: number; message?: string }) => {
+        const { code, status, message } = opts ?? {};
+        if (message) {
+            return { severity: "error" as const, summary: "Error", detail: message, life: 5000, icon: "pi pi-exclamation-triangle" };
+        }
+        if (code === "invalid_old_password" || status === 401) {
+            return { severity: "error" as const, summary: "Invalid Password", detail: "Old password is incorrect.", life: 5000, icon: "pi pi-times" };
+        }
+        if (code === "weak_password" || status === 422) {
+            return { severity: "warn" as const, summary: "Weak Password", detail: "New password does not meet strength requirements.", life: 6000, icon: "pi pi-lock" };
+        }
+        if (status && status >= 500) {
+            return { severity: "error" as const, summary: "Server Error", detail: "Server error, please try again.", life: 6000, icon: "pi pi-exclamation-triangle" };
+        }
+        return { severity: "error" as const, summary: "Error", detail: "Failed to change password. Please try again.", life: 5000, icon: "pi pi-exclamation-triangle" };
+    };
 
     const onSubmit = async (vals: FormValues) => {
+        if (!session?.user?.id || !session?.user?.role) {
+            toast.current?.show({ severity: "error", summary: "Not signed in", detail: "You must be signed in to change your password.", life: 5000, icon: "pi pi-exclamation-triangle" });
+            return;
+        }
+
+        if (strengthScore < 2) {
+            toast.current?.show({ severity: "warn", summary: "Weak Password", detail: "Please choose a stronger password.", life: 4000, icon: "pi pi-lock" });
+            return;
+        }
+
         setSaving(true);
+
         try {
-            const res = await fetch("/api/change-password", {
+            const payload = {
+                userId: session.user.id,
+                role: session.user.role,
+                oldPassword: vals.oldPassword,
+                newPassword: vals.newPassword,
+            };
+
+            const res = await fetch("/api/auth/change-password", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    oldPassword: vals.oldPassword,
-                    newPassword: vals.newPassword,
-                }),
+                body: JSON.stringify(payload),
             });
 
-            const json = await (res.ok ? res.json().catch(() => ({})) : res.json().catch(() => ({})));
+            let json: any = null;
+            try {
+                json = await res.json();
+            } catch (e) {
+                // ignore non-json
+            }
 
             if (!res.ok) {
-                const message = json?.error || json?.message || `Failed to change password (${res.status})`;
-                toast.current?.show({ severity: "error", summary: "Error", detail: message, life: 5000 });
+                const code = json?.code ?? json?.error;
+                const message = json?.message ?? undefined;
+                toast.current?.show(mapResponseToToast({ code, status: res.status, message }));
                 return;
             }
 
-            toast.current?.show({ severity: "success", summary: "Success", detail: "Password changed successfully.", life: 4000 });
-            reset();
-            setDialogVisible(false);
+            // SUCCESS: show success toast then close dialog after a short delay
+            toast.current?.show({ severity: "success", summary: "Success", detail: "Password changed successfully.", life: 1800, icon: "pi pi-check" });
+
+            // clear any previous timer
+            if (timerRef.current) {
+                window.clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+
+            // close after a short delay so user can see the toast
+            timerRef.current = window.setTimeout(() => {
+                reset();
+                setVisible(false);
+                timerRef.current = null;
+            }, 900);
         } catch (err: any) {
             console.error("change password error", err);
-            toast.current?.show({ severity: "error", summary: "Error", detail: err?.message || "Failed to change password", life: 5000 });
+            toast.current?.show(mapResponseToToast({ status: 500, message: err?.message }));
         } finally {
             setSaving(false);
         }
     };
 
-    const openDialog = () => setDialogVisible(true);
-    const closeDialog = () => {
-        setDialogVisible(false);
+    const handleClose = () => {
+        // clear pending close timer if user cancels
+        if (timerRef.current) {
+            window.clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        setVisible(false);
         reset();
     };
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 p-6 lg:p-12">
+        <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-800 p-6">
             <Toast ref={toast} />
-
-            <div className="max-w-6xl mx-auto">
-                <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-50 shadow-sm text-indigo-600">
-                            <FaCog className="w-8 h-8" />
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full max-w-md">
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 shadow-xl">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="p-3 rounded-full bg-white/10 border border-white/8">
+                            <FaLock className="w-6 h-6 text-white" />
                         </div>
-
                         <div>
-                            <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-                            <p className="text-sm text-gray-500">{subtitle}</p>
+                            <h1 className="text-white text-2xl font-semibold">Account Security</h1>
+                            <p className="text-white/80 text-sm">Change your account password securely.</p>
                         </div>
                     </div>
 
-                    <div className="flex gap-3">
-                        <button
-                            onClick={openDialog}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-2xl shadow-sm text-sm font-medium hover:shadow-md transition"
-                        >
-                            <FaPlus className="w-4 h-4" />
-                            Change password
-                        </button>
+                    <div className="mt-4">
+                        <p className="text-sm text-white/80 mb-4">To update your account password, click the button below. You will be asked to supply your current password and pick a new one.</p>
 
-                        <button
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-2xl shadow hover:shadow-lg text-sm font-medium transition opacity-80 cursor-not-allowed"
-                            disabled
-                        >
-                            <FaBell className="w-4 h-4" />
-                            Notify
-                        </button>
+                        <div className="flex justify-center">
+                            <Button
+                                label="Change password"
+                                icon="pi pi-key"
+                                className="p-button-rounded p-button-lg p-button-secondary bg-gradient-to-r from-indigo-500 to-cyan-500 border-0 shadow-md"
+                                onClick={() => setVisible(true)}
+                            />
+                        </div>
+
+                        <div className="mt-6 text-xs text-white/50 text-center">
+                            <span>Signed in as </span>
+                            <span className="font-medium">{session?.user?.email ?? session?.user?.name ?? "—"}</span>
+                        </div>
                     </div>
-                </header>
+                </div>
+            </motion.div>
 
-                <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <article className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-medium text-gray-900">Under Construction</h2>
-                            <span className="text-sm text-indigo-600 font-medium">Preview</span>
+            {/* Dialog / Modal */}
+            <Dialog
+                header={
+                    <div className="flex items-center gap-3">
+                        <FaLock className="text-indigo-600" />
+                        <div>
+                            <div className="text-lg font-semibold">Change password</div>
+                            <div className="text-sm text-gray-500">Enter your current password and choose a new one</div>
                         </div>
-
-                        <p className="text-gray-600 mb-6">{subtitle}</p>
-
-                        <div className="space-y-3">
-                            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                                <div className="h-3 rounded-full bg-indigo-500 w-1/3 transition-all" />
-                            </div>
-
-                            <div className="flex items-center gap-3 text-sm text-gray-500">
-                                <FaEye className="w-4 h-4" />
-                                <span>Preview layout</span>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <button className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium border border-indigo-100 inline-flex items-center gap-2">
-                                    <FaEye />
-                                    Preview layout
-                                </button>
-                                <button className="px-4 py-2 bg-white text-gray-700 rounded-lg text-sm font-medium border border-gray-200 inline-flex items-center gap-2">
-                                    <FaBook />
-                                    Docs
-                                </button>
-                            </div>
-                        </div>
-                    </article>
-
-                    {showSidebar && (
-                        <aside className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <h3 className="text-sm font-medium text-gray-900 mb-3">Quick info</h3>
-                            <dl className="text-sm text-gray-600 space-y-3">
-                                <div>
-                                    <dt className="font-medium text-gray-800">Items</dt>
-                                    <dd className="text-gray-500">—</dd>
-                                </div>
-
-                                <div>
-                                    <dt className="font-medium text-gray-800">Pending</dt>
-                                    <dd className="text-gray-500">—</dd>
-                                </div>
-
-                                <div>
-                                    <dt className="font-medium text-gray-800">Last update</dt>
-                                    <dd className="text-gray-500">{today}</dd>
-                                </div>
-                            </dl>
-
-                            <div className="mt-6">
-                                <button className="w-full px-4 py-2 bg-indigo-600 text-white rounded-2xl text-sm font-semibold hover:brightness-110 transition flex items-center justify-center gap-2">
-                                    <FaBell />
-                                    {ctaLabel}
-                                </button>
-                            </div>
-                        </aside>
-                    )}
-                </section>
-
-                <footer className="mt-10 text-center text-xs text-gray-400">© {new Date().getFullYear()} — Habnaj International Schools</footer>
-            </div>
-
-            {/* Change password dialog */}
-            <Dialog header="Change password" visible={dialogVisible} style={{ width: "420px" }} onHide={closeDialog} modal>
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Old password</label>
+                    </div>
+                }
+                visible={visible}
+                style={{ width: "420px", borderRadius: 12 }}
+                onHide={handleClose}
+                modal
+                className="rounded-xl"
+            >
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Current password</label>
                         <Controller
                             control={control}
                             name="oldPassword"
-                            rules={{ required: "Old password is required" }}
+                            rules={{ required: "Current password is required" }}
                             render={({ field }) => (
                                 <Password
-                                    name={field.name}
-                                    value={field.value ?? ""}
-                                    onChange={(e: any) => field.onChange(e.target.value)}
-                                    onBlur={field.onBlur}
+                                    {...field}
                                     toggleMask
                                     feedback={false}
-                                    className={errors.oldPassword ? "p-invalid w-full" : "w-full"}
-                                    inputClassName="w-full"
+                                    className={`w-full block ${errors.oldPassword ? "p-invalid" : ""}`}
+                                    inputClassName="w-full p-3 border-2 rounded-lg transition-all duration-300"
                                 />
                             )}
                         />
-                        {errors.oldPassword && <small className="p-error">{errors.oldPassword.message}</small>}
+                        {errors.oldPassword && <small className="text-red-600">{errors.oldPassword.message}</small>}
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">New password</label>
                         <Controller
                             control={control}
                             name="newPassword"
                             rules={{
                                 required: "New password is required",
-                                minLength: { value: 8, message: "Password must be at least 8 characters" },
-                                validate: (v) => (v !== watch("oldPassword") ? true : "New password must differ from old password"),
+                                minLength: { value: 8, message: "At least 8 characters required" },
+                                validate: (v) => (v !== watch("oldPassword") ? true : "New password must differ from current password"),
                             }}
                             render={({ field }) => (
                                 <Password
-                                    name={field.name}
-                                    value={field.value ?? ""}
-                                    onChange={(e: any) => field.onChange(e.target.value)}
-                                    onBlur={field.onBlur}
+                                    {...field}
                                     toggleMask
-                                    feedback
-                                    className={errors.newPassword ? "p-invalid w-full" : "w-full"}
-                                    inputClassName="w-full"
+                                    feedback={false}
+                                    className={`w-full block ${errors.newPassword ? "p-invalid" : ""}`}
+                                    inputClassName="w-full p-3 border-2 rounded-lg transition-all duration-300"
                                 />
                             )}
                         />
-                        {errors.newPassword && <small className="p-error">{errors.newPassword.message}</small>}
+                        {errors.newPassword ? <small className="text-red-600">{errors.newPassword.message}</small> : <PasswordStrengthBar score={strengthScore} />}
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirm new password</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Confirm new password</label>
                         <Controller
                             control={control}
                             name="confirmPassword"
@@ -251,23 +269,20 @@ const Security: React.FC<SecurityProps> = ({
                             }}
                             render={({ field }) => (
                                 <Password
-                                    name={field.name}
-                                    value={field.value ?? ""}
-                                    onChange={(e: any) => field.onChange(e.target.value)}
-                                    onBlur={field.onBlur}
+                                    {...field}
                                     toggleMask
                                     feedback={false}
-                                    className={errors.confirmPassword ? "p-invalid w-full" : "w-full"}
-                                    inputClassName="w-full"
+                                    className={`w-full block ${errors.confirmPassword ? "p-invalid" : ""}`}
+                                    inputClassName="w-full p-3 border-2 rounded-lg transition-all duration-300"
                                 />
                             )}
                         />
-                        {errors.confirmPassword && <small className="p-error">{errors.confirmPassword.message}</small>}
+                        {errors.confirmPassword && <small className="text-red-600">{errors.confirmPassword.message}</small>}
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-2">
-                        <Button type="button" label="Cancel" className="p-button-text" onClick={closeDialog} disabled={saving} />
-                        <Button type="submit" label={saving ? "Saving..." : "Save"} className="p-button-primary" loading={saving} />
+                    <div className="flex justify-end gap-3 pt-4">
+                        <Button type="button" label="Cancel" className="p-button-text" onClick={handleClose} disabled={saving} />
+                        <Button type="submit" label={saving ? "Saving..." : "Save"} icon={saving ? "pi pi-spin pi-spinner" : "pi pi-check"} className="p-button-primary" loading={saving} />
                     </div>
                 </form>
             </Dialog>
@@ -275,4 +290,4 @@ const Security: React.FC<SecurityProps> = ({
     );
 };
 
-export default Security;
+export default SecurityOnlyChangePassword;

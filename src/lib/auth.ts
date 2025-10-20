@@ -8,83 +8,124 @@ export const authOptions: NextAuthOptions = {
         CredentialsProvider({
             name: "credentials",
             credentials: {
-                email: { label: "Email", type: "email" },
+                username: { label: "Username", type: "text" },
                 password: { label: "Password", type: "password" },
-                admissionNumber: { label: "Admission Number", type: "text" },
             },
 
             // note the second param `req` to match the declared type
             async authorize(credentials, req): Promise<User | null> {
-                const { email, admissionNumber, password } = credentials ?? {};
-
-                if ((!email && !admissionNumber) || !password) {
-                    return null;
+                const { username, password } = credentials ?? {};
+                if (!username || !password) {
+                    throw new Error("invalid_credentials");
                 }
 
-                // Admin
-                const admin = await prisma.administration.findUnique({
-                    where: { email },
-                });
-                if (admin && admin.email && admin.password && admin.active) {
-                    const isValid = await bcrypt.compare(password, admin.password);
-                    if (isValid) {
-                        return {
-                            id: admin.id,
-                            email: admin.email,
-                            name: admin.email,
-                            role: admin.role.toLowerCase(),
-                            userType: "admin",
-                        } as unknown as User;
+                try {
+                    // Admin
+                    const admin = await prisma.administration.findUnique({
+                        where: { email: username },
+                    });
+                    if (admin) {
+                        if (!admin.active) {
+                            throw new Error("inactive");
+                        }
+                        if (admin.password) {
+                            const isValid = await bcrypt.compare(password, admin.password);
+                            if (isValid) {
+                                return {
+                                    id: String(admin.id),
+                                    email: admin.email,
+                                    name: admin.email,
+                                    role: String(admin.role).toLowerCase(),
+                                    userType: "admin",
+                                } as unknown as User;
+                            } else {
+                                // wrong password
+                                throw new Error("invalid_credentials");
+                            }
+                        }
                     }
-                }
 
-                // Teacher
-                const teacher = await prisma.teacher.findUnique({ where: { email } });
-                if (teacher && teacher.email && teacher.password && teacher.active) {
-                    const isValid = await bcrypt.compare(password, teacher.password);
-                    if (isValid) {
-                        return {
-                            id: teacher.id,
-                            email: teacher.email,
-                            name: `${teacher.firstname ?? ""} ${teacher.surname ?? ""} ${teacher.othername ?? ""}`.trim(),
-                            role: "teacher",
-                            userType: "teacher",
-                        } as unknown as User;
+                    // Teacher
+                    const teacher = await prisma.teacher.findUnique({ where: { email: username } });
+                    if (teacher) {
+                        if (!teacher.active) {
+                            throw new Error("inactive");
+                        }
+                        if (teacher.password) {
+                            const isValid = await bcrypt.compare(password, teacher.password);
+                            if (isValid) {
+                                return {
+                                    id: String(teacher.id),
+                                    email: teacher.email,
+                                    name: `${teacher.firstname ?? ""} ${teacher.surname ?? ""} ${teacher.othername ?? ""}`.trim(),
+                                    role: "teacher",
+                                    userType: "teacher",
+                                    section: teacher.section,
+                                } as unknown as User;
+                            } else {
+                                throw new Error("invalid_credentials");
+                            }
+                        }
                     }
-                }
 
-                // Student
-                const student = await prisma.student.findUnique({ where: { email } });
-                if (student && student.email && student.password && student.active) {
-                    const isValid = await bcrypt.compare(password, student.password);
-                    if (isValid && student.admissionnumber) {
-                        return {
-                            id: student.id,
-                            email: student.email,
-                            name: `${student.firstname ?? ""} ${student.surname ?? ""} ${student.othername ?? ""}`.trim(),
-                            role: "student",
-                            userType: "student",
-                            admissionNumber: student.admissionnumber,
-                        } as unknown as User;
+                    // Student (username is admissionnumber)
+                    const student = await prisma.student.findUnique({ where: { admissionnumber: username } });
+                    if (student) {
+                        if (!student.active) {
+                            throw new Error("inactive");
+                        }
+                        if (student.password) {
+                            const isValid = await bcrypt.compare(password, student.password);
+                            if (isValid && student.admissionnumber) {
+                                return {
+                                    id: String(student.id),
+                                    email: student.email,
+                                    name: `${student.firstname ?? ""} ${student.surname ?? ""} ${student.othername ?? ""}`.trim(),
+                                    role: "student",
+                                    userType: "student",
+                                    admissionNumber: student.admissionnumber,
+                                    section: student.section,
+                                } as unknown as User;
+                            } else {
+                                throw new Error("invalid_credentials");
+                            }
+                        }
                     }
-                }
 
-                // Parent
-                const parent = await prisma.parent.findUnique({ where: { email } });
-                if (parent && parent.email && parent.password && parent.active) {
-                    const isValid = await bcrypt.compare(password, parent.password);
-                    if (isValid) {
-                        return {
-                            id: parent.id,
-                            email: parent.email,
-                            name: `${parent.firstname ?? ""} ${parent.surname ?? ""} ${parent.othername ?? ""}`.trim(),
-                            role: "parent",
-                            userType: "parent",
-                        } as unknown as User;
+                    // Parent (username is phone)
+                    const parent = await prisma.parent.findUnique({ where: { phone: username } });
+                    if (parent) {
+                        if (!parent.active) {
+                            throw new Error("inactive");
+                        }
+                        if (parent.password) {
+                            const isValid = await bcrypt.compare(password, parent.password);
+                            if (isValid) {
+                                return {
+                                    id: String(parent.id),
+                                    email: parent.email,
+                                    name: `${parent.firstname ?? ""} ${parent.surname ?? ""} ${parent.othername ?? ""}`.trim(),
+                                    role: "parent",
+                                    userType: "parent",
+                                } as unknown as User;
+                            } else {
+                                throw new Error("invalid_credentials");
+                            }
+                        }
                     }
-                }
 
-                return null;
+                    // If we reached here, user not found
+                    throw new Error("invalid_credentials");
+                } catch (err: any) {
+                    // Prisma or unexpected error: map to server_error so client shows a generic server message
+                    if (err instanceof Error && ["inactive", "invalid_credentials"].includes(err.message)) {
+                        // rethrow known codes so client can handle them
+                        throw err;
+                    }
+
+                    console.error("Authorize error:", err);
+                    throw new Error("server_error");
+                }
             },
         }),
     ],

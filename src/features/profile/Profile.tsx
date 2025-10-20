@@ -11,6 +11,7 @@ import { Dropdown } from "primereact/dropdown";
 import { Calendar } from "primereact/calendar";
 import ImageView, { UploadResult } from "@/components/ImageView/ImageView";
 import profilePic from "@/assets/profile1.png";
+import { motion } from "framer-motion";
 
 type Role = "super" | "admin" | "teacher" | "student" | "parent" | "Guest" | string;
 
@@ -73,21 +74,6 @@ export default function Profile() {
         return `/api/students/${userId}`;
     }, [role, userId]);
 
-    const formatDateForInput = (d?: string | Date) => {
-        if (!d) return "";
-        const date = new Date(d);
-        if (Number.isNaN(date.getTime())) return "";
-        const yyyy = date.getFullYear();
-        const mm = String(date.getMonth() + 1).padStart(2, "0");
-        const dd = String(date.getDate()).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
-    };
-    const displayDate = (d?: string | Date) => {
-        if (!d) return "—";
-        return new Date(d).toLocaleDateString();
-    };
-
-    // only include qualification when role === "teacher"
     const shapeToDefaults = (p: any, r?: Role) => {
         const base: any = {
             title: p?.title ?? "",
@@ -118,12 +104,12 @@ export default function Profile() {
         handleSubmit,
         reset,
         formState: { errors },
+        watch,
     } = useForm({
         mode: "onBlur",
         defaultValues: shapeToDefaults({}, role),
     });
 
-    // Helper to safely access errors by string key (avoids TS2538)
     const getError = (key: string) => (errors as any)[key];
 
     const fetchProfile = useCallback(async () => {
@@ -242,10 +228,7 @@ export default function Profile() {
 
         switch (String(r).toLowerCase()) {
             case "teacher":
-                return [
-                    ...common,
-                    { key: "qualification", label: "Qualification", type: "select", required: true },
-                ];
+                return [...common, { key: "qualification", label: "Qualification", type: "select", required: true }];
             case "student":
                 return common;
             case "parent":
@@ -267,9 +250,9 @@ export default function Profile() {
 
     if (isSessionLoading || loadingProfile) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-800">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4" />
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white/30 mx-auto mb-4" />
                 </div>
             </div>
         );
@@ -296,236 +279,257 @@ export default function Profile() {
     const roleFields = fieldsByRole(role);
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 p-6 lg:p-12">
+        <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-800 p-6">
             <Toast ref={toast} />
-            <div className="max-w-3xl mx-auto">
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <div className="flex flex-col items-center">
-                        <div className="relative" style={{ overflow: "visible", paddingBottom: 18 }}>
-                            <div className="w-40 h-40 rounded-full overflow-hidden">
-                                <ImageView
-                                    path={avatarPath}
-                                    onChange={handleAvatarChange}
-                                    placeholder={avatarPlaceholder}
-                                    className="rounded-full"
-                                    width={160}
-                                    height={160}
-                                    alt={displayName}
-                                    editable={true}
-                                />
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full max-w-4xl">
+                {/* Glass card */}
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 shadow-xl">
+                    <div className="flex flex-col lg:flex-row gap-8">
+                        {/* Left: avatar + basic info */}
+                        <div className="w-full lg:w-1/3 flex flex-col items-center">
+                            <div className="relative">
+                                <div className="w-40 h-40 rounded-full overflow-hidden shadow-md border border-white/8">
+                                    <ImageView
+                                        path={avatarPath}
+                                        onChange={handleAvatarChange}
+                                        placeholder={avatarPlaceholder}
+                                        className="rounded-full object-cover"
+                                        width={160}
+                                        height={160}
+                                        alt={displayName}
+                                        editable={true}
+                                    />
+                                </div>
+                                <div className="absolute -bottom-2 right-0">
+                                    <div className="text-xs text-white/80 bg-black/30 px-3 py-1 rounded-full">Role: {role}</div>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 text-center">
+                                <h1 className="text-white text-2xl font-semibold">{displayName}</h1>
+                                <p className="text-white/80 text-sm mt-1">{profile?.email ?? "—"}</p>
+                                <p className="text-white/70 text-xs mt-1">Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString() : "—"}</p>
+                            </div>
+
+                            <div className="mt-6 flex gap-3">
+                                {!editMode ? (
+                                    <Button
+                                        label="Edit Profile"
+                                        icon="pi pi-pencil"
+                                        className="p-button-rounded p-button-lg bg-gradient-to-r from-indigo-500 to-cyan-500 border-0 text-white shadow-md"
+                                        onClick={handleStartEdit}
+                                    />
+                                ) : (
+                                    <>
+                                        <Button
+                                            label="Save"
+                                            icon="pi pi-save"
+                                            onClick={handleSubmit(onSubmit)}
+                                            loading={saving}
+                                            className="p-button-rounded p-button-lg bg-gradient-to-r from-green-500 to-emerald-500 border-0 text-white shadow-md"
+                                        />
+                                        <Button
+                                            label="Cancel"
+                                            icon="pi pi-times"
+                                            onClick={handleCancel}
+                                            className="p-button-rounded p-button-lg p-button-text text-white/90"
+                                        />
+                                    </>
+                                )}
                             </div>
                         </div>
 
-                        <div className="mt-4 text-center">
-                            <h1 className="text-2xl font-semibold text-gray-900">{displayName}</h1>
-                            <p className="text-sm text-gray-500 mt-1">{profile?.email ?? "—"}</p>
-                        </div>
+                        {/* Right: details */}
+                        <div className="w-full lg:w-2/3">
+                            <div className="bg-white/6 rounded-xl border border-white/8 p-6">
+                                <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {roleFields.map((f) => {
+                                        if (!editMode) {
+                                            return (
+                                                <div key={f.key} className="py-2">
+                                                    <div className="text-xs text-white/70 font-medium">{f.label}</div>
+                                                    <div className="text-sm text-white mt-1">{f.type === "date" ? (profile?.[f.key] ? new Date(profile[f.key]).toLocaleDateString() : "—") : profile?.[f.key] ?? "—"}</div>
+                                                </div>
+                                            );
+                                        }
 
-                        <div className="mt-4 flex items-center gap-2">
-                            {!editMode ? (
-                                <Button label="Edit Profile" icon="pi pi-pencil" onClick={handleStartEdit} className="rounded-lg" />
-                            ) : (
-                                <>
-                                    <Button label="Save" icon="pi pi-save" onClick={handleSubmit(onSubmit)} loading={saving} className="p-button-success rounded-lg" />
-                                    <Button label="Cancel" icon="pi pi-times" onClick={handleCancel} className="p-button-text" />
-                                </>
-                            )}
-                        </div>
-                    </div>
+                                        const fieldError = getError(f.key);
 
-                    <div className="mt-6">
-                        <div className="bg-gray-50 rounded-lg border border-gray-100 p-4">
-                            <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {roleFields.map((f) => {
-                                    // non-edit display mode
-                                    if (!editMode) {
-                                        // only render qualification for teacher because fieldsByRole will only include it for teacher
                                         return (
                                             <div key={f.key} className="py-2">
-                                                <div className="text-xs text-gray-600 font-bold">{f.label}</div>
-                                                <div className="text-sm text-gray-800 mt-1">
-                                                    {f.type === "date" ? displayDate(profile?.[f.key]) : profile?.[f.key] ?? "—"}
+                                                <div className="text-xs text-white/70 font-medium mb-1">
+                                                    {f.label}
+                                                    {f.required ? " *" : ""}
                                                 </div>
+
+                                                {f.type === "select" && f.key === "title" && (
+                                                    <Controller
+                                                        control={control}
+                                                        name="title"
+                                                        rules={{ required: f.required ? "Title is required" : false }}
+                                                        render={({ field }) => (
+                                                            <Dropdown
+                                                                value={field.value}
+                                                                options={titleOptions}
+                                                                onChange={(e) => field.onChange(e.value)}
+                                                                placeholder="Select title"
+                                                                className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                                inputId={`title-${f.key}`}
+                                                            />
+                                                        )}
+                                                    />
+                                                )}
+
+                                                {f.type === "select" && f.key === "qualification" && (
+                                                    <Controller
+                                                        control={control}
+                                                        name="qualification"
+                                                        rules={{ required: f.required ? "Qualification is required" : false }}
+                                                        render={({ field }) => (
+                                                            <Dropdown
+                                                                value={field.value}
+                                                                options={qualificationOptions}
+                                                                onChange={(e) => field.onChange(e.value)}
+                                                                placeholder="Select qualification"
+                                                                className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                            />
+                                                        )}
+                                                    />
+                                                )}
+
+                                                {f.type === "select" && f.key === "gender" && (
+                                                    <Controller
+                                                        control={control}
+                                                        name="gender"
+                                                        rules={{ required: f.required ? "Gender is required" : false }}
+                                                        render={({ field }) => (
+                                                            <Dropdown
+                                                                value={field.value}
+                                                                options={genderOptions}
+                                                                onChange={(e) => field.onChange(e.value)}
+                                                                placeholder="Select gender"
+                                                                className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                            />
+                                                        )}
+                                                    />
+                                                )}
+
+                                                {f.type === "select" && f.key === "bloodgroup" && (
+                                                    <Controller
+                                                        control={control}
+                                                        name="bloodgroup"
+                                                        render={({ field }) => (
+                                                            <Dropdown
+                                                                value={field.value}
+                                                                options={bloodgroupOptions}
+                                                                onChange={(e) => field.onChange(e.value)}
+                                                                placeholder="Select blood group"
+                                                                className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                            />
+                                                        )}
+                                                    />
+                                                )}
+
+                                                {f.type === "date" && (
+                                                    <Controller
+                                                        control={control}
+                                                        name="birthday"
+                                                        render={({ field }) => (
+                                                            <Calendar
+                                                                value={field.value ?? null}
+                                                                onChange={(e) => field.onChange(e.value)}
+                                                                dateFormat="dd/mm/yy"
+                                                                placeholder="Select Date"
+                                                                className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                            />
+                                                        )}
+                                                    />
+                                                )}
+
+                                                {f.type === "textarea" && (
+                                                    <Controller
+                                                        control={control}
+                                                        name={f.key as any}
+                                                        render={({ field }) => (
+                                                            <InputTextarea
+                                                                rows={3}
+                                                                value={field.value ?? ""}
+                                                                onChange={(e) => field.onChange((e.target as HTMLTextAreaElement).value)}
+                                                                className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                                style={{ padding: 12 }}
+                                                            />
+                                                        )}
+                                                    />
+                                                )}
+
+                                                {(f.type === "text" || f.type === "email") && (
+                                                    <Controller
+                                                        control={control}
+                                                        name={f.key as any}
+                                                        rules={{
+                                                            required: f.required ? `${f.label} is required` : false,
+                                                            ...(f.type === "email"
+                                                                ? {
+                                                                    pattern: {
+                                                                        value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/i,
+                                                                        message: "Invalid email address",
+                                                                    },
+                                                                }
+                                                                : {}),
+                                                            ...(f.key === "phone"
+                                                                ? {
+                                                                    minLength: { value: 7, message: "Phone is too short" },
+                                                                    maxLength: { value: 20, message: "Phone is too long" },
+                                                                }
+                                                                : {}),
+                                                        }}
+                                                        render={({ field }) => (
+                                                            <InputText
+                                                                value={field.value ?? ""}
+                                                                onChange={(e) => field.onChange((e.target as HTMLInputElement).value)}
+                                                                type={f.type === "email" ? "email" : "text"}
+                                                                className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                                style={{ padding: 12 }}
+                                                            />
+                                                        )}
+                                                    />
+                                                )}
+
+                                                {fieldError && <small className="p-error">{(fieldError as any)?.message}</small>}
                                             </div>
                                         );
-                                    }
+                                    })}
+                                </form>
+                            </div>
 
-                                    // edit mode
-                                    const fieldError = getError(f.key);
+                            <div className="mt-4 bg-white/6 rounded-xl border border-white/8 p-4">
+                                {role === "student" && (
+                                    <>
+                                        <div className="text-sm text-white/70">Admission date</div>
+                                        <div className="text-sm text-white mb-3">{profile?.admissiondate ? new Date(profile.admissiondate).toLocaleDateString() : "—"}</div>
+                                        <div className="text-sm text-white/70">Class</div>
+                                        <div className="text-sm text-white">{profile?.class?.name ?? profile?.classid ?? "—"}</div>
+                                    </>
+                                )}
 
-                                    return (
-                                        <div key={f.key} className="py-2">
-                                            <div className="text-xs text-gray-600 font-medium mb-1">
-                                                {f.label}
-                                                {f.required ? " *" : ""}
-                                            </div>
+                                {role === "teacher" && (
+                                    <>
+                                        <div className="text-sm text-white/70">Subjects</div>
+                                        <div className="text-sm text-white">{Array.isArray(profile?.subjects) ? profile.subjects.map((s: any) => s.name).join(", ") : "—"}</div>
+                                    </>
+                                )}
 
-                                            {f.type === "select" && f.key === "title" && (
-                                                <Controller
-                                                    control={control}
-                                                    name="title"
-                                                    rules={{ required: f.required ? "Title is required" : false }}
-                                                    render={({ field }) => (
-                                                        <Dropdown
-                                                            value={field.value}
-                                                            options={titleOptions}
-                                                            onChange={(e) => field.onChange(e.value)}
-                                                            placeholder="Select title"
-                                                            className={getError("title") ? "p-invalid w-full" : "w-full"}
-                                                        />
-                                                    )}
-                                                />
-                                            )}
-
-                                            {f.type === "select" && f.key === "qualification" && (
-                                                <Controller
-                                                    control={control}
-                                                    name="qualification"
-                                                    rules={{ required: f.required ? "Qualification is required" : false }}
-                                                    render={({ field }) => (
-                                                        <Dropdown
-                                                            value={field.value}
-                                                            options={qualificationOptions}
-                                                            onChange={(e) => field.onChange(e.value)}
-                                                            placeholder="Select qualification"
-                                                            className={getError("qualification") ? "p-invalid w-full" : "w-full"}
-                                                        />
-                                                    )}
-                                                />
-                                            )}
-
-                                            {f.type === "select" && f.key === "gender" && (
-                                                <Controller
-                                                    control={control}
-                                                    name="gender"
-                                                    rules={{ required: f.required ? "Gender is required" : false }}
-                                                    render={({ field }) => (
-                                                        <Dropdown
-                                                            value={field.value}
-                                                            options={genderOptions}
-                                                            onChange={(e) => field.onChange(e.value)}
-                                                            placeholder="Select gender"
-                                                            className={getError("gender") ? "p-invalid w-full" : "w-full"}
-                                                        />
-                                                    )}
-                                                />
-                                            )}
-
-                                            {f.type === "select" && f.key === "bloodgroup" && (
-                                                <Controller
-                                                    control={control}
-                                                    name="bloodgroup"
-                                                    render={({ field }) => (
-                                                        <Dropdown
-                                                            value={field.value}
-                                                            options={bloodgroupOptions}
-                                                            onChange={(e) => field.onChange(e.value)}
-                                                            placeholder="Select blood group"
-                                                            className={getError("bloodgroup") ? "p-invalid w-full" : "w-full"}
-                                                        />
-                                                    )}
-                                                />
-                                            )}
-
-                                            {f.type === "date" && (
-                                                <Controller
-                                                    control={control}
-                                                    name="birthday"
-                                                    rules={{}}
-                                                    render={({ field }) => (
-                                                        <Calendar
-                                                            value={field.value ?? null}
-                                                            onChange={(e) => field.onChange(e.value)}
-                                                            dateFormat="dd/mm/yy"
-                                                            placeholder="Select Date"
-                                                            className={getError("birthday") ? "p-invalid w-full" : "w-full"}
-                                                        />
-                                                    )}
-                                                />
-                                            )}
-
-                                            {f.type === "textarea" && (
-                                                <Controller
-                                                    control={control}
-                                                    name={f.key as any}
-                                                    rules={{}}
-                                                    render={({ field }) => (
-                                                        <InputTextarea
-                                                            rows={3}
-                                                            value={field.value ?? ""}
-                                                            onChange={(e) => field.onChange((e.target as HTMLTextAreaElement).value)}
-                                                            className={fieldError ? "p-invalid w-full" : "w-full"}
-                                                        />
-                                                    )}
-                                                />
-                                            )}
-
-                                            {(f.type === "text" || f.type === "email") && (
-                                                <Controller
-                                                    control={control}
-                                                    name={f.key as any}
-                                                    rules={{
-                                                        required: f.required ? `${f.label} is required` : false,
-                                                        ...(f.type === "email"
-                                                            ? {
-                                                                pattern: {
-                                                                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/i,
-                                                                    message: "Invalid email address",
-                                                                },
-                                                            }
-                                                            : {}),
-                                                        ...(f.key === "phone"
-                                                            ? {
-                                                                minLength: { value: 7, message: "Phone is too short" },
-                                                                maxLength: { value: 20, message: "Phone is too long" },
-                                                            }
-                                                            : {}),
-                                                    }}
-                                                    render={({ field }) => (
-                                                        <InputText
-                                                            value={field.value ?? ""}
-                                                            onChange={(e) => field.onChange((e.target as HTMLInputElement).value)}
-                                                            type={f.type === "email" ? "email" : "text"}
-                                                            className={fieldError ? "p-invalid w-full" : "w-full"}
-                                                        />
-                                                    )}
-                                                />
-                                            )}
-
-                                            {fieldError && <small className="p-error">{(fieldError as any)?.message}</small>}
-                                        </div>
-                                    );
-                                })}
-                            </form>
-                        </div>
-
-                        <div className="mt-4 bg-white rounded-lg border border-gray-100 p-4">
-                            {role === "student" && (
-                                <>
-                                    <div className="text-sm text-gray-600">Admission date</div>
-                                    <div className="text-sm text-gray-800 mb-3">{displayDate(profile?.admissiondate)}</div>
-                                    <div className="text-sm text-gray-600">Class</div>
-                                    <div className="text-sm text-gray-800">{profile?.class?.name ?? profile?.classid ?? "—"}</div>
-                                </>
-                            )}
-
-                            {role === "teacher" && (
-                                <>
-                                    <div className="text-sm text-gray-600">Subjects</div>
-                                    <div className="text-sm text-gray-800">{Array.isArray(profile?.subjects) ? profile.subjects.map((s: any) => s.name).join(", ") : "—"}</div>
-                                </>
-                            )}
-
-                            {role === "parent" && (
-                                <>
-                                    <div className="text-sm text-gray-600">Children</div>
-                                    <div className="text-sm text-gray-800">{Array.isArray(profile?.students) ? profile.students.map((s: any) => `${s.firstname} ${s.surname}`).join(", ") : "—"}</div>
-                                </>
-                            )}
+                                {role === "parent" && (
+                                    <>
+                                        <div className="text-sm text-white/70">Children</div>
+                                        <div className="text-sm text-white">{Array.isArray(profile?.students) ? profile.students.map((s: any) => `${s.firstname} ${s.surname}`).join(", ") : "—"}</div>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </motion.div>
         </main>
     );
 }

@@ -41,7 +41,8 @@ export const studentSchema = z.object({
     password: passwordSchema.optional(),
     parentid: z.string().min(1, { message: "Parent is required!" }),
     classid: z.string().min(1, { message: "Class is required!" }),
-    active: z.boolean().default(true)
+    active: z.boolean().default(true),
+    section: z.string().optional()
 });
 export type StudentSchema = z.infer<typeof studentSchema>;
 export const studentUpdateSchema = studentSchema.partial();

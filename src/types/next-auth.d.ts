@@ -8,6 +8,7 @@ declare module "next-auth" {
             name: string;
             role: string;
             userType: string,
+            section: string?
         };
     }
 
@@ -17,6 +18,7 @@ declare module "next-auth" {
         name: string;
         role: string;
         userType: string,
+        section: string?
     }
 }
 
