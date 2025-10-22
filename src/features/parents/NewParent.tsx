@@ -23,12 +23,17 @@ interface Option {
 
 // Define title options for dropdown
 const titleOptions = [
+    { label: "Alh.", value: "Alh." },
+    { label: "Bar.", value: "Bar." },
+    { label: "Dr.", value: "Dr." },
+    { label: "Engr.", value: "Engr." },
+    { label: "Haj.", value: "Haj." },
+    { label: "Mal.", value: "Mal." },
+    { label: "Miss.", value: "Miss." },
     { label: "Mr.", value: "Mr." },
     { label: "Mrs.", value: "Mrs." },
-    { label: "Miss.", value: "Miss." },
-    { label: "Dr.", value: "Dr." },
+    { label: "Past.", value: "Past." },
     { label: "Prof.", value: "Prof." },
-    { label: "Engr.", value: "Engr." },
 ];
 
 // Define gender options for dropdown
@@ -86,7 +91,7 @@ const NewParent: React.FC = () => {
             bloodgroup: "",
             occupation: "",
             religion: "",
-            email: "",
+            /* email: "", */
             phone: "",
             state: "",
             lga: "",
@@ -98,9 +103,9 @@ const NewParent: React.FC = () => {
 
     // Watch state changes
     const selectedState = watch("state");
-
+    console.log("Form errors:", errors);
     // Fetch states on component mount
-    useEffect(() => {
+    /* useEffect(() => {
         const controller = new AbortController();
         let mounted = true;
 
@@ -138,10 +143,10 @@ const NewParent: React.FC = () => {
             mounted = false;
             controller.abort();
         };
-    }, []);
+    }, []); */
 
     // Fetch LGAs based on selected state
-    useEffect(() => {
+    /* useEffect(() => {
         const controller = new AbortController();
         let mounted = true;
 
@@ -184,7 +189,7 @@ const NewParent: React.FC = () => {
             mounted = false;
             controller.abort();
         };
-    }, [selectedState]);
+    }, [selectedState]); */
 
     // A helper function to handle toast display
     const show = (
@@ -206,7 +211,7 @@ const NewParent: React.FC = () => {
         try {
             const payload = {
                 ...data,
-                avarta: uploaded ? uploaded.path : null,
+                avarta: uploaded ? uploaded.path : "",
                 password: data.password || "password",
             };
             const res = await fetch("/api/parents", {
@@ -222,7 +227,7 @@ const NewParent: React.FC = () => {
                     router.back();
                 }, 1500);
             } else {
-                show("error", "Creation Error", result.error || result.message || "Failed to create new parent record, please try again.");
+                show("error", "Creation Error", result.error || result.message || "Failed to create parent.");
             }
         } catch (err: any) {
             show("error", "Creation Error", err.message || "Could not create new parent record.");
@@ -243,7 +248,7 @@ const NewParent: React.FC = () => {
     }
 
     return (
-        <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
+        <section className="w-[96%] max-w-2xl bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
             {saving && <Spinner visible onHide={() => setSaving(false)} />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
@@ -251,7 +256,7 @@ const NewParent: React.FC = () => {
                 <Button
                     label="Back"
                     icon="pi pi-arrow-left"
-                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
+                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 hidden sm:inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
                     onClick={handleBack}
                 />
             </div>
@@ -282,7 +287,7 @@ const NewParent: React.FC = () => {
                         {errors.title && <small className="p-error">{errors.title.message}</small>}
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-col-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="firstname">First Name</label>
                             <InputText
@@ -303,7 +308,7 @@ const NewParent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field">
+                    <div className="p-field ">
                         <label htmlFor="surname">Surname</label>
                         <InputText
                             id="surname"
@@ -313,8 +318,8 @@ const NewParent: React.FC = () => {
                         {errors.surname && <small className="p-error">{errors.surname.message}</small>}
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
-                        <div>
+                    <div className="p-field">
+                        {/* <div>
                             <label htmlFor="birthday">Birthday</label>
                             <Controller
                                 name="birthday"
@@ -332,7 +337,7 @@ const NewParent: React.FC = () => {
                                 )}
                             />
                             {errors.birthday && <small className="p-error">{errors.birthday.message}</small>}
-                        </div>
+                        </div> */}
                         <div>
                             <label htmlFor="gender">Gender</label>
                             <Controller
@@ -352,7 +357,7 @@ const NewParent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field grid grid-col-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="bloodgroup">Blood Group</label>
                             <Controller
@@ -379,9 +384,9 @@ const NewParent: React.FC = () => {
                             />
                             {errors.occupation && <small className="p-error">{errors.occupation.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field grid grid-col-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="religion">Religion</label>
                             <Controller
@@ -409,9 +414,9 @@ const NewParent: React.FC = () => {
                             />
                             {errors.email && <small className="p-error">{errors.email.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field">
                         <div>
                             <label htmlFor="phone">Phone</label>
                             <InputText
@@ -421,7 +426,7 @@ const NewParent: React.FC = () => {
                             />
                             {errors.phone && <small className="p-error">{errors.phone.message}</small>}
                         </div>
-                        <div>
+                        {/* <div>
                             <label htmlFor="state">State</label>
                             <Controller
                                 name="state"
@@ -437,10 +442,10 @@ const NewParent: React.FC = () => {
                                 )}
                             />
                             {errors.state && <small className="p-error">{errors.state.message}</small>}
-                        </div>
+                        </div> */}
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field grid grid-col-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="lga">LGA</label>
                             <Controller
@@ -469,7 +474,7 @@ const NewParent: React.FC = () => {
                             />
                             {errors.address && <small className="p-error">{errors.address.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
                         <Button

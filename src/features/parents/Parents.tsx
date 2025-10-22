@@ -256,7 +256,7 @@ const Parents: React.FC<ParentsProps> = ({
                         emptyMessage="No parents found."
                         selectionMode="multiple"
                     >
-                        <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />
+                        {permit && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
                         <Column
                             header="Name"
                             body={(rowData) =>
@@ -266,7 +266,6 @@ const Parents: React.FC<ParentsProps> = ({
                             }
                             sortable
                         />
-                        <Column field="email" header="Email" />
                         <Column field="phone" header="Phone" />
                         <Column field="gender" header="Gender" />
                         {permit && (

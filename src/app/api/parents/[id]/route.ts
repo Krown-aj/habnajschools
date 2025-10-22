@@ -117,14 +117,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, parentUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, email, phone, address, password, active, avarta } = bodyValidation.data!;
+        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, phone, address, password, active, avarta } = bodyValidation.data!;
 
-        // Check for email or phone conflicts
-        if (email || phone) {
+        // Check for phone conflicts
+        if (phone) {
             const existingParent = await prisma.parent.findFirst({
                 where: {
                     OR: [
-                        { email, id: { not: id } },
                         { phone, id: { not: id } }
                     ]
                 }
@@ -132,7 +131,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
             if (existingParent) {
                 return NextResponse.json(
-                    { error: existingParent.email === email ? 'Email already exists' : 'Phone already exists' },
+                    { error: 'Phone already exists' },
                     { status: 409 }
                 );
             }
@@ -150,7 +149,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (religion) updateData.religion = religion;
         if (state) updateData.state = state;
         if (lga) updateData.lga = lga;
-        if (email) updateData.email = email;
         if (phone) updateData.phone = phone;
         if (address) updateData.address = address;
         if (password) updateData.password = await bcrypt.hash(password, 12);

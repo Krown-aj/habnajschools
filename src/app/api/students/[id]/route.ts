@@ -53,6 +53,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 active: true,
                 address: true,
                 state: true,
+                section: true,
                 lga: true,
                 avarta: true,
                 class: {
@@ -111,30 +112,30 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, studentUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { firstname, surname, othername, birthday, gender, religion, house, bloodgroup, admissiondate, email, phone, address, state, lga, avarta, password, active, parentid, classid } = bodyValidation.data!;
+        const { firstname, surname, othername, birthday, gender, religion, house, bloodgroup, admissiondate, /* email, phone, */ address, state, lga, avarta, password, active, parentid, classid, section } = bodyValidation.data!;
 
         // Check for email or phone conflicts
-        if (email || phone) {
-            const existingStudent = await prisma.student.findFirst({
-                where: {
-                    OR: [
-                        { email: email || null, id: { not: id } },
-                        { phone: phone || null, id: { not: id } }
-                    ]
-                }
-            });
-
-            if (existingStudent) {
-                return NextResponse.json(
-                    {
-                        error:
-                            existingStudent.email === email ? 'Email already exists' :
-                                'Phone already exists'
-                    },
-                    { status: 409 }
-                );
-            }
-        }
+        /*  if (email || phone) {
+             const existingStudent = await prisma.student.findFirst({
+                 where: {
+                     OR: [
+                         { email: email || null, id: { not: id } },
+                         { phone: phone || null, id: { not: id } }
+                     ]
+                 }
+             });
+ 
+             if (existingStudent) {
+                 return NextResponse.json(
+                     {
+                         error:
+                             existingStudent.email === email ? 'Email already exists' :
+                                 'Phone already exists'
+                     },
+                     { status: 409 }
+                 );
+             }
+         } */
 
         // Validate parentid and classid if provided
         if (parentid) {
@@ -174,8 +175,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (house) updateData.house = house;
         if (bloodgroup !== undefined) updateData.bloodgroup = bloodgroup;
         if (admissiondate) updateData.admissiondate = admissiondate;
-        if (email !== undefined) updateData.email = email;
-        if (phone !== undefined) updateData.phone = phone;
+        if (section) updateData.section = section;
+        /* if (email !== undefined) updateData.email = email;
+        if (phone !== undefined) updateData.phone = phone; */
         if (address) updateData.address = address;
         if (state) updateData.state = state;
         if (lga) updateData.lga = lga;
@@ -195,6 +197,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 surname: true,
                 email: true,
                 phone: true,
+                section: true,
                 gender: true,
                 active: true,
                 classid: true,

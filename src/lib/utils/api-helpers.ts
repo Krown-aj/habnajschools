@@ -46,6 +46,7 @@ export async function validateRequestBody<T>(
         return { data: validated };
     } catch (error) {
         if (error instanceof z.ZodError) {
+            //console.error('Zod validation error:', error);
             return {
                 error: NextResponse.json(
                     { error: 'Validation failed', details: error.message },

@@ -254,7 +254,7 @@ const Students: React.FC<StudentsProps> = ({
                         emptyMessage="No students found."
                         selectionMode="multiple"
                     >
-                        <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />
+                        {permit && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
                         <Column field="admissionnumber" header="Admission Number" sortable />
                         <Column
                             header="Name"
@@ -266,6 +266,7 @@ const Students: React.FC<StudentsProps> = ({
                             sortable
                         />
                         <Column field="gender" header="Gender" sortable />
+                        <Column field="section" header="Section" sortable />
                         <Column
                             header="Class"
                             body={(rowData) => rowData.class?.name || '–'}

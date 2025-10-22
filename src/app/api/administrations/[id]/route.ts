@@ -96,7 +96,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         }
 
         const updateData: any = {};
-        if (email) updateData.email = email;
         if (role) updateData.role = role;
         if (active !== undefined) updateData.active = active;
         if (password) updateData.password = await bcrypt.hash(password, 12);

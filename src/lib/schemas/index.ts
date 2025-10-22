@@ -5,7 +5,7 @@ import { tr } from '@faker-js/faker';
 // Common schemas
 export const idSchema = z.string().cuid();
 export const emailSchema = z.string().email();
-export const phoneSchema = z.string().min(10).max(15);
+export const phoneSchema = z.string().min(10, { message: "Phone number must be at least 10 characters long." }).max(15);
 export const passwordSchema = z.string().min(6);
 
 // Administration Schema
@@ -32,17 +32,17 @@ export const studentSchema = z.object({
     house: z.string().min(1, { message: "House is required!" }),
     bloodgroup: z.string().min(1, { message: "Blood group is required!" }),
     admissiondate: z.string().datetime().or(z.date()).optional(),
-    email: emailSchema.optional(),
-    phone: phoneSchema.optional(),
+    /* email: emailSchema.optional(),
+    phone: phoneSchema.optional(), */
     address: z.string().min(1, { message: "Address is required!" }),
-    state: z.string().min(1, { message: "State is required!" }),
-    lga: z.string().min(1, { message: "LGA is required!" }),
+    state: z.string().optional(),
+    lga: z.string().optional(),
     avarta: z.string().optional(),
     password: passwordSchema.optional(),
     parentid: z.string().min(1, { message: "Parent is required!" }),
     classid: z.string().min(1, { message: "Class is required!" }),
     active: z.boolean().default(true),
-    section: z.string().optional()
+    section: z.string().min(1, { message: "Section is required!" })
 });
 export type StudentSchema = z.infer<typeof studentSchema>;
 export const studentUpdateSchema = studentSchema.partial();
@@ -78,14 +78,14 @@ export const parentSchema = z.object({
     birthday: z.string().datetime().or(z.date()).optional(),
     bloodgroup: z.string().optional(),
     gender: z.nativeEnum(UserSex),
-    occupation: z.string().min(1),
-    religion: z.string().min(1, { message: "Religion is required!" }),
-    state: z.string().min(1, { message: "State is required!" }),
-    lga: z.string().min(1, { message: "LGA is required!" }),
-    email: emailSchema,
+    occupation: z.string().optional(),
+    religion: z.string().optional(),
+    state: z.string().optional(),
+    lga: z.string().optional(),
+    /* email: emailSchema.optional(), */
     phone: phoneSchema,
     avarta: z.string().optional(),
-    address: z.string().min(1, { message: "Address is required!" }),
+    address: z.string().optional(),
     password: passwordSchema.optional(),
     active: z.boolean().default(true)
 });

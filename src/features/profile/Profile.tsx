@@ -74,6 +74,24 @@ export default function Profile() {
         return `/api/students/${userId}`;
     }, [role, userId]);
 
+    // --- FIX: normalize avatar shapes into a string URL ---
+    const getAvatarUrl = (avatar: any, legacyAvarta?: any) => {
+        const raw = avatar ?? legacyAvarta;
+        if (!raw) return undefined;
+        if (typeof raw === "string") return raw;
+        if (typeof raw === "object" && typeof (raw as any).src === "string") return (raw as any).src;
+        if (typeof raw === "object") {
+            const candidates = [(raw as any).url, (raw as any).path, (raw as any).src];
+            for (const c of candidates) {
+                if (typeof c === "string" && c.length) return c;
+            }
+        }
+        return undefined;
+    };
+    // --- end FIX ---
+
+    const staticProfilePicUrl = (profilePic as any)?.src ?? profilePic;
+
     const shapeToDefaults = (p: any, r?: Role) => {
         const base: any = {
             title: p?.title ?? "",
@@ -89,7 +107,8 @@ export default function Profile() {
             address: p?.address ?? "",
             state: p?.state ?? "",
             lga: p?.lga ?? "",
-            avarta: p?.avarta ?? "",
+            // keep raw avatar/avarta; display uses getAvatarUrl()
+            avatar: p?.avatar ?? p?.avarta ?? "",
         };
 
         if (String(r).toLowerCase() === "teacher") {
@@ -104,7 +123,6 @@ export default function Profile() {
         handleSubmit,
         reset,
         formState: { errors },
-        watch,
     } = useForm({
         mode: "onBlur",
         defaultValues: shapeToDefaults({}, role),
@@ -174,7 +192,9 @@ export default function Profile() {
 
     const handleAvatarChange = useCallback(
         async (meta: UploadResult) => {
-            return saveProfile({ avarta: meta.path });
+            // Normalize uploader result into a string before saving.
+            const avatarUrl = typeof meta === "string" ? meta : (meta.path ?? meta.url ?? undefined);
+            return saveProfile({ avatar: avatarUrl });
         },
         [saveProfile]
     );
@@ -190,7 +210,6 @@ export default function Profile() {
         if (vals.birthday) patch.birthday = new Date(vals.birthday).toISOString();
         if (vals.gender !== undefined) patch.gender = vals.gender;
         if (vals.bloodgroup !== undefined) patch.bloodgroup = vals.bloodgroup;
-        if (vals.email !== undefined) patch.email = vals.email;
         if (vals.phone !== undefined) patch.phone = vals.phone;
         if (vals.address !== undefined) patch.address = vals.address;
         if (vals.state !== undefined) patch.state = vals.state;
@@ -244,15 +263,16 @@ export default function Profile() {
         }
     };
 
-    const avatarPath = typeof profile?.avarta === "string" && profile.avarta.startsWith("/") ? profile.avarta : undefined;
-    const avatarPlaceholder =
-        profile?.avarta && typeof profile.avarta === "string" && /^https?:\/\//i.test(profile.avarta) ? profile.avarta : profilePic;
+    // derive final avatar URL strings used by UI
+    const resolvedAvatarUrl = useMemo(() => getAvatarUrl(profile?.avatar, profile?.avarta), [profile?.avatar, profile?.avarta]);
+    const avatarPath = resolvedAvatarUrl && resolvedAvatarUrl.startsWith("/") ? resolvedAvatarUrl : undefined;
+    const avatarPlaceholder = resolvedAvatarUrl && /^https?:\/\//i.test(resolvedAvatarUrl) ? resolvedAvatarUrl : staticProfilePicUrl;
 
     if (isSessionLoading || loadingProfile) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-800">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white/30 mx-auto mb-4" />
+                    <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-white/30 mx-auto mb-4" />
                 </div>
             </div>
         );
@@ -260,11 +280,11 @@ export default function Profile() {
 
     if (!userId) {
         return (
-            <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 p-6 lg:p-12">
+            <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 p-4 sm:p-6 lg:p-12">
                 <div className="max-w-3xl mx-auto">
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center">
-                        <h2 className="text-lg font-semibold">Not signed in</h2>
-                        <p className="text-sm text-gray-500 mt-2">Please sign in to view your profile.</p>
+                    <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 text-center">
+                        <h2 className="text-lg sm:text-xl font-semibold">Not signed in</h2>
+                        <p className="text-sm sm:text-base text-gray-500 mt-2">Please sign in to view your profile.</p>
                     </div>
                 </div>
             </main>
@@ -279,21 +299,21 @@ export default function Profile() {
     const roleFields = fieldsByRole(role);
 
     return (
-        <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-800 p-6">
+        <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-800 p-4 sm:p-6">
             <Toast ref={toast} />
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full max-w-4xl">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-4xl">
                 {/* Glass card */}
-                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 shadow-xl">
-                    <div className="flex flex-col lg:flex-row gap-8">
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-xl">
+                    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
                         {/* Left: avatar + basic info */}
                         <div className="w-full lg:w-1/3 flex flex-col items-center">
                             <div className="relative">
-                                <div className="w-40 h-40 rounded-full overflow-hidden shadow-md border border-white/8">
+                                <div className="w-28 h-28 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-full overflow-hidden shadow-md border border-white/8">
                                     <ImageView
                                         path={avatarPath}
                                         onChange={handleAvatarChange}
                                         placeholder={avatarPlaceholder}
-                                        className="rounded-full object-cover"
+                                        className="rounded-full object-cover w-full h-full"
                                         width={160}
                                         height={160}
                                         alt={displayName}
@@ -301,23 +321,23 @@ export default function Profile() {
                                     />
                                 </div>
                                 <div className="absolute -bottom-2 right-0">
-                                    <div className="text-xs text-white/80 bg-black/30 px-3 py-1 rounded-full">Role: {role}</div>
+                                    <div className="text-xs sm:text-sm text-white/90 bg-black/30 px-2 sm:px-3 py-1 rounded-full">Role: {String(role)}</div>
                                 </div>
                             </div>
 
-                            <div className="mt-4 text-center">
-                                <h1 className="text-white text-2xl font-semibold">{displayName}</h1>
-                                <p className="text-white/80 text-sm mt-1">{profile?.email ?? "—"}</p>
-                                <p className="text-white/70 text-xs mt-1">Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString() : "—"}</p>
+                            <div className="mt-3 text-center">
+                                <h1 className="text-lg sm:text-2xl font-semibold text-white">{displayName}</h1>
+                                <p className="text-sm sm:text-base text-white/80 mt-1">{profile?.email ?? "—"}</p>
+                                <p className="text-xs sm:text-sm text-white/70 mt-1">Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString() : "—"}</p>
                             </div>
 
-                            <div className="mt-6 flex gap-3">
+                            <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                                 {!editMode ? (
                                     <Button
                                         label="Edit Profile"
                                         icon="pi pi-pencil"
-                                        className="p-button-rounded p-button-lg bg-gradient-to-r from-indigo-500 to-cyan-500 border-0 text-white shadow-md"
                                         onClick={handleStartEdit}
+                                        className="p-button-rounded p-button-lg w-full sm:w-auto py-2 sm:py-3 text-sm sm:text-base bg-gradient-to-r from-indigo-500 to-cyan-500 border-0 text-white shadow-md"
                                     />
                                 ) : (
                                     <>
@@ -326,13 +346,13 @@ export default function Profile() {
                                             icon="pi pi-save"
                                             onClick={handleSubmit(onSubmit)}
                                             loading={saving}
-                                            className="p-button-rounded p-button-lg bg-gradient-to-r from-green-500 to-emerald-500 border-0 text-white shadow-md"
+                                            className="p-button-rounded p-button-lg w-full sm:w-auto py-2 sm:py-3 text-sm sm:text-base bg-gradient-to-r from-green-500 to-emerald-500 border-0 text-white shadow-md"
                                         />
                                         <Button
                                             label="Cancel"
                                             icon="pi pi-times"
                                             onClick={handleCancel}
-                                            className="p-button-rounded p-button-lg p-button-text text-white/90"
+                                            className="p-button-rounded p-button-lg w-full sm:w-auto py-2 sm:py-3 text-sm sm:text-base p-button-text text-white/90"
                                         />
                                     </>
                                 )}
@@ -341,23 +361,28 @@ export default function Profile() {
 
                         {/* Right: details */}
                         <div className="w-full lg:w-2/3">
-                            <div className="bg-white/6 rounded-xl border border-white/8 p-6">
-                                <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white/6 rounded-xl border border-white/8 p-3 sm:p-6">
+                                <form className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                                     {roleFields.map((f) => {
                                         if (!editMode) {
                                             return (
                                                 <div key={f.key} className="py-2">
-                                                    <div className="text-xs text-white/70 font-medium">{f.label}</div>
-                                                    <div className="text-sm text-white mt-1">{f.type === "date" ? (profile?.[f.key] ? new Date(profile[f.key]).toLocaleDateString() : "—") : profile?.[f.key] ?? "—"}</div>
+                                                    <div className="text-xs sm:text-sm text-white/70 font-medium">{f.label}</div>
+                                                    <div className="text-sm sm:text-base text-white mt-1">
+                                                        {f.type === "date" ? (profile?.[f.key] ? new Date(profile[f.key]).toLocaleDateString() : "—") : profile?.[f.key] ?? "—"}
+                                                    </div>
                                                 </div>
                                             );
                                         }
 
                                         const fieldError = getError(f.key);
 
+                                        // EMAIL: make non-editable during editing
+                                        const isEmailField = f.key === "email";
+
                                         return (
                                             <div key={f.key} className="py-2">
-                                                <div className="text-xs text-white/70 font-medium mb-1">
+                                                <div className="text-xs sm:text-sm text-white/70 font-medium mb-1">
                                                     {f.label}
                                                     {f.required ? " *" : ""}
                                                 </div>
@@ -486,10 +511,19 @@ export default function Profile() {
                                                         render={({ field }) => (
                                                             <InputText
                                                                 value={field.value ?? ""}
-                                                                onChange={(e) => field.onChange((e.target as HTMLInputElement).value)}
-                                                                type={f.type === "email" ? "email" : "text"}
-                                                                className={fieldError ? "p-invalid w-full" : "w-full"}
+                                                                onChange={(e) => {
+                                                                    if (isEmailField && editMode) return;
+                                                                    field.onChange((e.target as HTMLInputElement).value);
+                                                                }}
+                                                                readOnly={isEmailField && editMode}
+                                                                aria-readonly={isEmailField && editMode}
+                                                                className={
+                                                                    (fieldError ? "p-invalid " : "") +
+                                                                    "w-full " +
+                                                                    (isEmailField && editMode ? "bg-white/5 text-white/80 cursor-not-allowed" : "")
+                                                                }
                                                                 style={{ padding: 12 }}
+                                                                type={f.type === "email" ? "email" : "text"}
                                                             />
                                                         )}
                                                     />
@@ -502,27 +536,27 @@ export default function Profile() {
                                 </form>
                             </div>
 
-                            <div className="mt-4 bg-white/6 rounded-xl border border-white/8 p-4">
+                            <div className="mt-4 bg-white/6 rounded-xl border border-white/8 p-3 sm:p-4">
                                 {role === "student" && (
                                     <>
-                                        <div className="text-sm text-white/70">Admission date</div>
-                                        <div className="text-sm text-white mb-3">{profile?.admissiondate ? new Date(profile.admissiondate).toLocaleDateString() : "—"}</div>
-                                        <div className="text-sm text-white/70">Class</div>
-                                        <div className="text-sm text-white">{profile?.class?.name ?? profile?.classid ?? "—"}</div>
+                                        <div className="text-sm sm:text-base text-white/70">Admission date</div>
+                                        <div className="text-sm sm:text-base text-white mb-3">{profile?.admissiondate ? new Date(profile.admissiondate).toLocaleDateString() : "—"}</div>
+                                        <div className="text-sm sm:text-base text-white/70">Class</div>
+                                        <div className="text-sm sm:text-base text-white">{profile?.class?.name ?? profile?.classid ?? "—"}</div>
                                     </>
                                 )}
 
                                 {role === "teacher" && (
                                     <>
-                                        <div className="text-sm text-white/70">Subjects</div>
-                                        <div className="text-sm text-white">{Array.isArray(profile?.subjects) ? profile.subjects.map((s: any) => s.name).join(", ") : "—"}</div>
+                                        <div className="text-sm sm:text-base text-white/70">Subjects</div>
+                                        <div className="text-sm sm:text-base text-white">{Array.isArray(profile?.subjects) ? profile.subjects.map((s: any) => s.name).join(", ") : "—"}</div>
                                     </>
                                 )}
 
                                 {role === "parent" && (
                                     <>
-                                        <div className="text-sm text-white/70">Children</div>
-                                        <div className="text-sm text-white">{Array.isArray(profile?.students) ? profile.students.map((s: any) => `${s.firstname} ${s.surname}`).join(", ") : "—"}</div>
+                                        <div className="text-sm sm:text-base text-white/70">Children</div>
+                                        <div className="text-sm sm:text-base text-white">{Array.isArray(profile?.students) ? profile.students.map((s: any) => `${s.firstname} ${s.surname}`).join(", ") : "—"}</div>
                                     </>
                                 )}
                             </div>

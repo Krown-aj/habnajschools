@@ -245,16 +245,12 @@ const Student: React.FC<StudentProps> = () => {
                                         <div>
                                             <dl className="text-xs sm:text-sm text-gray-600 space-y-2 sm:space-y-4">
                                                 <div>
-                                                    <dt className="font-semibold">Email</dt>
-                                                    <dd>{studentData?.email || "–"}</dd>
-                                                </div>
-                                                <div>
-                                                    <dt className="font-semibold">Phone</dt>
-                                                    <dd>{studentData?.phone || "–"}</dd>
-                                                </div>
-                                                <div>
                                                     <dt className="font-semibold">Admission Date</dt>
                                                     <dd>{studentData?.admissiondate ? moment(studentData.admissiondate).format("LL") : "–"}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-semibold">Section</dt>
+                                                    <dd>{studentData?.section || "–"}</dd>
                                                 </div>
                                                 <div>
                                                     <dt className="font-semibold">Guardian</dt>

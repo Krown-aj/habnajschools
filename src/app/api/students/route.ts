@@ -63,6 +63,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         phone: true,
         gender: true,
         religion: true,
+        section: true,
         house: true,
         bloodgroup: true,
         active: true,
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const bodyValidation = await validateRequestBody(request, studentSchema);
     if (bodyValidation.error) return bodyValidation.error;
 
-    const { firstname, surname, othername, birthday, gender, religion, house, bloodgroup, admissiondate, email, phone, address, state, lga, avarta, password, active, parentid, classid } = bodyValidation.data!;
+    const { firstname, surname, othername, birthday, gender, religion, house, bloodgroup, admissiondate, /* email, phone, */ address, section, state, lga, avarta, password, active, parentid, classid } = bodyValidation.data!;
 
     // Validate parentid and classid
     const parent = await prisma.parent.findUnique({ where: { id: parentid } });
@@ -149,8 +150,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       where: {
         OR: [
           { admissionnumber },
-          { email: email || null },
-          { phone: phone || null }
         ]
       }
     });
@@ -160,8 +159,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         {
           error:
             existingStudent.admissionnumber === admissionnumber ? 'Admission number already exists' :
-              existingStudent.email === email ? 'Email already exists' :
-                'Phone already exists'
+              'Phone already exists'
         },
         { status: 409 }
       );
@@ -181,8 +179,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         house,
         bloodgroup,
         admissiondate,
-        email,
-        phone,
+        section,
+        /*    email,
+           phone, */
         address,
         state,
         lga,
@@ -204,6 +203,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         birthday: true,
         avarta: true,
         address: true,
+        section: true,
         state: true,
         lga: true,
         house: true,

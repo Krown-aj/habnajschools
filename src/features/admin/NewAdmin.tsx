@@ -85,10 +85,10 @@ const NewAdmin: React.FC = () => {
                     router.back();
                 }, 1500);
             } else {
-                show("error", "Creation Error", result.error || result.message || "Failed to create new admin record, please try again.");
+                show("error", "Creation Error", result.error || result.message || "Failed to create admin.");
             }
         } catch (err: any) {
-            show("error", "Creation Error", err.message || "Could not create new admin record.");
+            show("error", "Creation Error", err.message || "An error occurred while creating admin.");
         } finally {
             setLoading(false);
         }

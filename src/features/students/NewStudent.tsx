@@ -27,6 +27,14 @@ const genderOptions = [
     { label: "Female", value: "FEMALE" },
 ];
 
+// Define section options for dropdown
+const sectionOptions = [
+    { label: "Pre-Nursery", value: "PRE-NURSERY" },
+    { label: "Nursery", value: "NURSERY" },
+    { label: "Primary", value: "PRIMARY" },
+    { label: "Secondary", value: "SECONDARY" },
+];
+
 // Define blood group options for dropdown
 const bloodgroupOptions = [
     { label: "A+", value: "A+" },
@@ -53,7 +61,7 @@ const houseOptions = [
 const religionOptions = [
     { label: "Christianity", value: "CHRISTIANITY" },
     { label: "Islam", value: "ISLAM" },
-    { label: "Other", value: "OTHER" },
+    { label: "Others", value: "OTHER" },
 ];
 
 const NewStudent: React.FC = () => {
@@ -87,8 +95,8 @@ const NewStudent: React.FC = () => {
             religion: "",
             house: "",
             bloodgroup: "",
-            email: "",
-            phone: "",
+            /*  email: "",
+             phone: "", */
             address: "",
             state: "",
             lga: "",
@@ -110,14 +118,14 @@ const NewStudent: React.FC = () => {
             if (mounted) setLoading(true);
             try {
                 // Fetch states
-                const stateRes = await fetch("https://nga-states-lga.onrender.com/fetch", {
+                /* const stateRes = await fetch("https://nga-states-lga.onrender.com/fetch", {
                     signal: controller.signal,
                 });
                 if (!stateRes.ok) throw new Error(`Failed to fetch states (status ${stateRes.status})`);
                 const stateData = await stateRes.json();
                 if (!Array.isArray(stateData)) throw new Error("Unexpected response shape — expected array for states");
                 const stateOpts: Option[] = stateData.map((state: string) => ({ label: state, value: state }));
-                if (mounted) setStates(stateOpts);
+                if (mounted) setStates(stateOpts); */
 
                 // Fetch parents
                 const parentRes = await fetch("/api/parents", {
@@ -150,7 +158,7 @@ const NewStudent: React.FC = () => {
                 toast?.current?.show({
                     severity: "error",
                     summary: "Error",
-                    detail: "Could not load required data (states, parents, or classes).",
+                    detail: "Could not fetch data.",
                     life: 3000,
                 });
             } finally {
@@ -167,50 +175,50 @@ const NewStudent: React.FC = () => {
     }, []);
 
     // Fetch LGAs based on selected state
-    useEffect(() => {
-        const controller = new AbortController();
-        let mounted = true;
-
-        const fetchLgas = async () => {
-            if (!selectedState) {
-                if (mounted) setLgas([]);
-                return;
-            }
-            if (mounted) setLoading(true);
-            try {
-                const res = await fetch(`https://nga-states-lga.onrender.com/?state=${encodeURIComponent(selectedState)}`, {
-                    signal: controller.signal,
-                });
-                if (!res.ok) throw new Error(`Failed to fetch LGAs (status ${res.status})`);
-                const data = await res.json();
-
-                if (!Array.isArray(data)) throw new Error("Unexpected response shape — expected array for LGAs");
-
-                const opts: Option[] = data.map((lga: string) => ({ label: lga, value: lga }));
-
-                if (mounted) setLgas(opts);
-            } catch (err: any) {
-                if (err?.name === "AbortError") return;
-                console.error("Unexpected fetch error:", err);
-                toast?.current?.show({
-                    severity: "error",
-                    summary: "Error",
-                    detail: "Could not load LGAs for the selected state.",
-                    life: 3000,
-                });
-                if (mounted) setLgas([]);
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        fetchLgas();
-
-        return () => {
-            mounted = false;
-            controller.abort();
-        };
-    }, [selectedState]);
+    /*  useEffect(() => {
+         const controller = new AbortController();
+         let mounted = true;
+ 
+         const fetchLgas = async () => {
+             if (!selectedState) {
+                 if (mounted) setLgas([]);
+                 return;
+             }
+             if (mounted) setLoading(true);
+             try {
+                 const res = await fetch(`https://nga-states-lga.onrender.com/?state=${encodeURIComponent(selectedState)}`, {
+                     signal: controller.signal,
+                 });
+                 if (!res.ok) throw new Error(`Failed to fetch LGAs (status ${res.status})`);
+                 const data = await res.json();
+ 
+                 if (!Array.isArray(data)) throw new Error("Unexpected response shape — expected array for LGAs");
+ 
+                 const opts: Option[] = data.map((lga: string) => ({ label: lga, value: lga }));
+ 
+                 if (mounted) setLgas(opts);
+             } catch (err: any) {
+                 if (err?.name === "AbortError") return;
+                 console.error("Unexpected fetch error:", err);
+                 toast?.current?.show({
+                     severity: "error",
+                     summary: "Error",
+                     detail: "Could not load LGAs for the selected state.",
+                     life: 3000,
+                 });
+                 if (mounted) setLgas([]);
+             } finally {
+                 if (mounted) setLoading(false);
+             }
+         };
+ 
+         fetchLgas();
+ 
+         return () => {
+             mounted = false;
+             controller.abort();
+         };
+     }, [selectedState]); */
 
     // A helper function to handle toast display
     const show = (
@@ -234,7 +242,7 @@ const NewStudent: React.FC = () => {
                 ...data,
                 admissiondate: new Date(),
                 password: 'password',
-                avarta: uploaded ? uploaded.path : null,
+                avarta: uploaded ? uploaded.path : "",
             };
             const res = await fetch("/api/students", {
                 method: "POST",
@@ -270,7 +278,7 @@ const NewStudent: React.FC = () => {
     }
 
     return (
-        <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
+        <section className="w-[96%] max-w-2xl bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
             {saving && <Spinner visible onHide={() => setSaving(false)} />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
@@ -278,7 +286,7 @@ const NewStudent: React.FC = () => {
                 <Button
                     label="Back"
                     icon="pi pi-arrow-left"
-                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
+                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 hidden sm:inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
                     onClick={handleBack}
                 />
             </div>
@@ -291,7 +299,7 @@ const NewStudent: React.FC = () => {
                             dropboxFolder="/habnajschools"
                         />
                     </div>
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="firstname">First Name</label>
                             <InputText
@@ -322,7 +330,7 @@ const NewStudent: React.FC = () => {
                         {errors.surname && <small className="p-error">{errors.surname.message}</small>}
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="birthday">Birthday</label>
                             <Controller
@@ -361,7 +369,7 @@ const NewStudent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="religion">Religion</label>
                             <Controller
@@ -398,7 +406,7 @@ const NewStudent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-1 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="bloodgroup">Blood Group</label>
                             <Controller
@@ -416,9 +424,26 @@ const NewStudent: React.FC = () => {
                             />
                             {errors.bloodgroup && <small className="p-error">{errors.bloodgroup.message}</small>}
                         </div>
+                        <div>
+                            <label htmlFor="section">Section</label>
+                            <Controller
+                                name="section"
+                                control={control}
+                                render={({ field }) => (
+                                    <Dropdown
+                                        id="section"
+                                        {...field}
+                                        options={sectionOptions}
+                                        placeholder="Select Section"
+                                        className={errors.section ? "p-invalid w-full" : "w-full"}
+                                    />
+                                )}
+                            />
+                            {errors.section && <small className="p-error">{errors.section.message}</small>}
+                        </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="email">Email</label>
                             <InputText
@@ -438,9 +463,9 @@ const NewStudent: React.FC = () => {
                             />
                             {errors.phone && <small className="p-error">{errors.phone.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="state">State</label>
                             <Controller
@@ -476,7 +501,7 @@ const NewStudent: React.FC = () => {
                             />
                             {errors.lga && <small className="p-error">{errors.lga.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
                     <div className="p-field">
                         <label htmlFor="address">Address</label>
@@ -489,7 +514,7 @@ const NewStudent: React.FC = () => {
                         {errors.address && <small className="p-error">{errors.address.message}</small>}
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="parentid">Parent/Guardians</label>
                             <Controller

@@ -22,12 +22,17 @@ interface Option {
 
 // Define title options for dropdown
 const titleOptions = [
+    { label: "Alh.", value: "Alh." },
+    { label: "Bar.", value: "Bar." },
+    { label: "Dr.", value: "Dr." },
+    { label: "Engr.", value: "Engr." },
+    { label: "Haj.", value: "Haj." },
+    { label: "Mal.", value: "Mal." },
+    { label: "Miss.", value: "Miss." },
     { label: "Mr.", value: "Mr." },
     { label: "Mrs.", value: "Mrs." },
-    { label: "Miss.", value: "Miss." },
-    { label: "Dr.", value: "Dr." },
+    { label: "Past.", value: "Past." },
     { label: "Prof.", value: "Prof." },
-    { label: "Engr.", value: "Engr." },
 ];
 
 // Define gender options for dropdown
@@ -86,7 +91,7 @@ const EditParent: React.FC = () => {
             bloodgroup: "",
             occupation: "",
             religion: "",
-            email: "",
+            /*  email: "", */
             phone: "",
             state: "",
             lga: "",
@@ -117,9 +122,9 @@ const EditParent: React.FC = () => {
                 }
 
                 // Fetch parent and states concurrently
-                const [parentResponse, statesResponse] = await Promise.all([
+                const [parentResponse, /* statesResponse */] = await Promise.all([
                     fetch(`/api/parents/${parentId}`, { signal: controller.signal }),
-                    fetch("https://nga-states-lga.onrender.com/fetch", { signal: controller.signal }),
+                    /*   fetch("https://nga-states-lga.onrender.com/fetch", { signal: controller.signal }), */
                 ]);
 
                 // Handle parent response
@@ -147,20 +152,20 @@ const EditParent: React.FC = () => {
                 setValue("firstname", parentData.firstname || "");
                 setValue("surname", parentData.surname || "");
                 setValue("othername", parentData.othername || "");
-                setValue("birthday", parentData.birthday ? new Date(parentData.birthday) : undefined);
+                /* setValue("birthday", parentData.birthday ? new Date(parentData.birthday) : undefined); */
                 setValue("gender", parentData.gender || undefined);
-                setValue("bloodgroup", parentData.bloodgroup || "");
+                /* setValue("bloodgroup", parentData.bloodgroup || "");
                 setValue("occupation", parentData.occupation || "");
                 setValue("religion", parentData.religion || "");
-                setValue("email", parentData.email || "");
+                setValue("email", parentData.email || ""); */
                 setValue("phone", parentData.phone || "");
-                setValue("state", parentData.state || "");
+                /* setValue("state", parentData.state || "");
                 setValue("lga", parentData.lga || "");
-                setValue("address", parentData.address || "");
+                setValue("address", parentData.address || ""); */
                 setValue("active", parentData.active !== undefined ? parentData.active : true);
 
                 // Handle states response
-                if (!statesResponse.ok) {
+                /* if (!statesResponse.ok) {
                     toast.current?.show({
                         severity: "error",
                         summary: "Fetching Error",
@@ -180,7 +185,7 @@ const EditParent: React.FC = () => {
                     return;
                 }
                 const stateOptions: Option[] = statesData.map((state: string) => ({ label: state, value: state }));
-                if (mounted) setStates(stateOptions);
+                if (mounted) setStates(stateOptions); */
             } catch (err: any) {
                 if (err?.name === "AbortError") return;
                 console.error("Unexpected fetch error:", err);
@@ -206,45 +211,45 @@ const EditParent: React.FC = () => {
     }, [parentId, setValue]);
 
     // Fetch LGAs based on selected state
-    useEffect(() => {
-        const controller = new AbortController();
-        let mounted = true;
-
-        const fetchLgas = async () => {
-            if (mounted) setLoading(true);
-            try {
-                const res = await fetch(`https://nga-states-lga.onrender.com/?state=${encodeURIComponent(selectedState ?? "")}`, {
-                    signal: controller.signal,
-                });
-                if (!res.ok) throw new Error(`Failed to fetch LGAs (status ${res.status})`);
-                const data = await res.json();
-
-                if (!Array.isArray(data)) throw new Error("Unexpected response shape — expected array");
-
-                const opts: Option[] = data.map((lga: string) => ({ label: lga, value: lga }));
-
-                if (mounted) setLgas(opts);
-            } catch (err: any) {
-                if (err?.name === "AbortError") return;
-                console.error("Unexpected fetch error:", err);
-                toast?.current?.show({
-                    severity: "error",
-                    summary: "Error",
-                    detail: "Could not load LGAs.",
-                    life: 3000,
-                });
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        if (selectedState) fetchLgas();
-
-        return () => {
-            mounted = false;
-            controller.abort();
-        };
-    }, [selectedState]);
+    /*  useEffect(() => {
+         const controller = new AbortController();
+         let mounted = true;
+ 
+         const fetchLgas = async () => {
+             if (mounted) setLoading(true);
+             try {
+                 const res = await fetch(`https://nga-states-lga.onrender.com/?state=${encodeURIComponent(selectedState ?? "")}`, {
+                     signal: controller.signal,
+                 });
+                 if (!res.ok) throw new Error(`Failed to fetch LGAs (status ${res.status})`);
+                 const data = await res.json();
+ 
+                 if (!Array.isArray(data)) throw new Error("Unexpected response shape — expected array");
+ 
+                 const opts: Option[] = data.map((lga: string) => ({ label: lga, value: lga }));
+ 
+                 if (mounted) setLgas(opts);
+             } catch (err: any) {
+                 if (err?.name === "AbortError") return;
+                 console.error("Unexpected fetch error:", err);
+                 toast?.current?.show({
+                     severity: "error",
+                     summary: "Error",
+                     detail: "Could not load LGAs.",
+                     life: 3000,
+                 });
+             } finally {
+                 if (mounted) setLoading(false);
+             }
+         };
+ 
+         if (selectedState) fetchLgas();
+ 
+         return () => {
+             mounted = false;
+             controller.abort();
+         };
+     }, [selectedState]); */
 
     // A helper function to handle toast display
     const show = (
@@ -312,7 +317,7 @@ const EditParent: React.FC = () => {
                 <Button
                     label="Back"
                     icon="pi pi-arrow-left"
-                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
+                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 hidden sm:inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
                     onClick={handleBack}
                 />
             </div>
@@ -337,7 +342,7 @@ const EditParent: React.FC = () => {
                         {errors.title && <small className="p-error">{errors.title.message}</small>}
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="firstname">First Name</label>
                             <InputText
@@ -368,8 +373,8 @@ const EditParent: React.FC = () => {
                         {errors.surname && <small className="p-error">{errors.surname.message}</small>}
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
-                        <div>
+                    <div className="p-field ">
+                        {/* <div>
                             <label htmlFor="birthday">Birthday</label>
                             <Controller
                                 name="birthday"
@@ -387,7 +392,7 @@ const EditParent: React.FC = () => {
                                 )}
                             />
                             {errors.birthday && <small className="p-error">{errors.birthday.message}</small>}
-                        </div>
+                        </div> */}
                         <div>
                             <label htmlFor="gender">Gender</label>
                             <Controller
@@ -407,7 +412,7 @@ const EditParent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/*  <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="bloodgroup">Blood Group</label>
                             <Controller
@@ -434,9 +439,9 @@ const EditParent: React.FC = () => {
                             />
                             {errors.occupation && <small className="p-error">{errors.occupation.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="religion">Religion</label>
                             <Controller
@@ -464,9 +469,9 @@ const EditParent: React.FC = () => {
                             />
                             {errors.email && <small className="p-error">{errors.email.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field">
                         <div>
                             <label htmlFor="phone">Phone</label>
                             <InputText
@@ -493,9 +498,9 @@ const EditParent: React.FC = () => {
                             />
                             {errors.state && <small className="p-error">{errors.state.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="lga">LGA</label>
                             <Controller
@@ -524,7 +529,7 @@ const EditParent: React.FC = () => {
                             />
                             {errors.address && <small className="p-error">{errors.address.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
                     {/* Action Buttons */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">

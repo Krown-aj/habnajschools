@@ -225,18 +225,22 @@ const Parent: React.FC<ParentProps> = () => {
                                         <div>
                                             <dl className="text-xs sm:text-sm text-gray-600 space-y-2 sm:space-y-2">
                                                 <div>
-                                                    <dt className="font-semibold">Address</dt>
-                                                    <dd>{parentData?.address || "–"}</dd>
+                                                    <dt className="font-semibold">Title</dt>
+                                                    <dd>{parentData?.title || "–"}</dd>
                                                 </div>
 
                                                 <div>
-                                                    <dt className="font-semibold">State</dt>
-                                                    <dd>{parentData?.state || "–"}</dd>
+                                                    <dt className="font-semibold">First Name</dt>
+                                                    <dd>{parentData?.firstname || "–"}</dd>
                                                 </div>
 
                                                 <div>
-                                                    <dt className="font-semibold">LGA</dt>
-                                                    <dd>{parentData?.lga || "–"}</dd>
+                                                    <dt className="font-semibold">Surname</dt>
+                                                    <dd>{parentData?.surname || "–"}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-semibold">Other Name</dt>
+                                                    <dd>{parentData?.othername || "–"}</dd>
                                                 </div>
                                             </dl>
                                         </div>
@@ -244,13 +248,8 @@ const Parent: React.FC<ParentProps> = () => {
                                         <div>
                                             <dl className="text-xs sm:text-sm text-gray-600 space-y-2 sm:space-y-2">
                                                 <div>
-                                                    <dt className="font-semibold">Occupation</dt>
-                                                    <dd>{parentData?.occupation || "–"}</dd>
-                                                </div>
-
-                                                <div>
-                                                    <dt className="font-semibold">Religion</dt>
-                                                    <dd>{parentData?.religion || "–"}</dd>
+                                                    <dt className="font-semibold">Gender</dt>
+                                                    <dd>{parentData?.gender || "–"}</dd>
                                                 </div>
 
                                                 <div>

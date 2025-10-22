@@ -210,9 +210,10 @@ const SecurityOnlyChangePassword: React.FC = () => {
                     </div>
                 }
                 visible={visible}
-                style={{ width: "420px", borderRadius: 12 }}
+                style={{ width: "30vw", borderRadius: 12 }}
                 onHide={handleClose}
                 modal
+                breakpoints={{ "1024px": "70vw", "640px": "94vw" }}
                 className="rounded-xl"
             >
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

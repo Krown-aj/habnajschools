@@ -26,6 +26,14 @@ const genderOptions = [
     { label: "Female", value: "FEMALE" },
 ];
 
+//Define section options for dropdown
+const sectionOptions = [
+    { label: "Pre-Nursery", value: "PRE-NURSERY" },
+    { label: "Nursery", value: "NURSERY" },
+    { label: "Primary", value: "PRIMARY" },
+    { label: "Secondary", value: "SECONDARY" },
+];
+
 // Define blood group options for dropdown
 const bloodgroupOptions = [
     { label: "A+", value: "A+" },
@@ -89,8 +97,7 @@ const EditStudent: React.FC = () => {
             house: "",
             bloodgroup: "",
             admissiondate: undefined,
-            email: "",
-            phone: "",
+            section: "",
             state: "",
             lga: "",
             address: "",
@@ -104,7 +111,7 @@ const EditStudent: React.FC = () => {
     // Watch state changes
     const selectedState = watch("state");
 
-    // Fetch student data, states, parents, and classes on component mount
+    // Fetch student data, parents, and classes on component mount
     useEffect(() => {
         const controller = new AbortController();
         let mounted = true;
@@ -123,9 +130,9 @@ const EditStudent: React.FC = () => {
                 }
 
                 // Fetch student, states, parents, and classes concurrently
-                const [studentResponse, statesResponse, parentsResponse, classesResponse] = await Promise.all([
+                const [studentResponse, /* statesResponse, */ parentsResponse, classesResponse] = await Promise.all([
                     fetch(`/api/students/${studentId}`, { signal: controller.signal }),
-                    fetch("https://nga-states-lga.onrender.com/fetch", { signal: controller.signal }),
+                    /* fetch("https://nga-states-lga.onrender.com/fetch", { signal: controller.signal }), */
                     fetch("/api/parents", { signal: controller.signal }),
                     fetch("/api/classes", { signal: controller.signal }),
                 ]);
@@ -159,8 +166,9 @@ const EditStudent: React.FC = () => {
                 setValue("religion", studentData.religion || "");
                 setValue("house", studentData.house || "");
                 setValue("bloodgroup", studentData.bloodgroup || "");
-                setValue("email", studentData.email || "");
-                setValue("phone", studentData.phone || "");
+                setValue("section", studentData.section || "");
+                /* setValue("email", studentData.email || "");
+                setValue("phone", studentData.phone || ""); */
                 setValue("state", studentData.state || "");
                 setValue("lga", studentData.lga || "");
                 setValue("address", studentData.address || "");
@@ -170,7 +178,7 @@ const EditStudent: React.FC = () => {
                 setValue("active", studentData.active !== undefined ? studentData.active : true);
 
                 // Handle states response
-                if (!statesResponse.ok) {
+                /* if (!statesResponse.ok) {
                     toast.current?.show({
                         severity: "error",
                         summary: "Fetching Error",
@@ -190,7 +198,7 @@ const EditStudent: React.FC = () => {
                     return;
                 }
                 const stateOptions: Option[] = statesData.map((state: string) => ({ label: state, value: state }));
-                if (mounted) setStates(stateOptions);
+                if (mounted) setStates(stateOptions); */
 
                 // Handle parents response
                 if (!parentsResponse.ok) {
@@ -250,7 +258,7 @@ const EditStudent: React.FC = () => {
     }, [studentId, setValue]);
 
     // Fetch LGAs based on selected state
-    useEffect(() => {
+    /* useEffect(() => {
         const controller = new AbortController();
         let mounted = true;
 
@@ -288,7 +296,7 @@ const EditStudent: React.FC = () => {
             mounted = false;
             controller.abort();
         };
-    }, [selectedState]);
+    }, [selectedState]); */
 
     // A helper function to handle toast display
     const show = (
@@ -356,13 +364,13 @@ const EditStudent: React.FC = () => {
                 <Button
                     label="Back"
                     icon="pi pi-arrow-left"
-                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
+                    className="bg-red-600 text-white rounded-lg text-base font-bold border border-red-600 hidden sm:inline-flex items-center gap-2 py-2 px-3 mr-4 hover:bg-red-700 hover:border-red-700 transition-all duration-300"
                     onClick={handleBack}
                 />
             </div>
             <div className="space-y-4 p-4">
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="firstname">First Name</label>
                             <InputText
@@ -393,7 +401,7 @@ const EditStudent: React.FC = () => {
                         {errors.surname && <small className="p-error">{errors.surname.message}</small>}
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="birthday">Birthday</label>
                             <Controller
@@ -432,7 +440,7 @@ const EditStudent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="religion">Religion</label>
                             <Controller
@@ -469,7 +477,7 @@ const EditStudent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="bloodgroup">Blood Group</label>
                             <Controller
@@ -488,18 +496,25 @@ const EditStudent: React.FC = () => {
                             {errors.bloodgroup && <small className="p-error">{errors.bloodgroup.message}</small>}
                         </div>
                         <div>
-                            <label htmlFor="email">Email</label>
-                            <InputText
-                                id="email"
-                                type="email"
-                                {...register("email")}
-                                className={errors.email ? "p-invalid w-full" : "w-full"}
+                            <label htmlFor="section">Section</label>
+                            <Controller
+                                name="section"
+                                control={control}
+                                render={({ field }) => (
+                                    <Dropdown
+                                        id="section"
+                                        {...field}
+                                        options={sectionOptions}
+                                        placeholder="Select Section"
+                                        className={errors.section ? "p-invalid w-full" : "w-full"}
+                                    />
+                                )}
                             />
-                            {errors.email && <small className="p-error">{errors.email.message}</small>}
+                            {errors.section && <small className="p-error">{errors.section.message}</small>}
                         </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    {/* <div className="p-field grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="phone">Phone</label>
                             <InputText
@@ -526,10 +541,10 @@ const EditStudent: React.FC = () => {
                             />
                             {errors.state && <small className="p-error">{errors.state.message}</small>}
                         </div>
-                    </div>
+                    </div> */}
 
-                    <div className="p-field grid grid-cols-2 gap-4">
-                        <div>
+                    <div className="p-field">
+                        {/*  <div>
                             <label htmlFor="lga">LGA</label>
                             <Controller
                                 name="lga"
@@ -546,7 +561,7 @@ const EditStudent: React.FC = () => {
                                 )}
                             />
                             {errors.lga && <small className="p-error">{errors.lga.message}</small>}
-                        </div>
+                        </div> */}
                         <div>
                             <label htmlFor="address">Address</label>
                             <InputTextarea
@@ -559,7 +574,7 @@ const EditStudent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field grid grid-cols-2 gap-4">
+                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="parentid">Parent</label>
                             <Controller

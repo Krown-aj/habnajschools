@@ -77,13 +77,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const bodyValidation = await validateRequestBody(request, parentSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, email, phone, address, password, active, avarta } = bodyValidation.data!;
+        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, phone, address, password, active, avarta } = bodyValidation.data!;
 
         // Check if email or phone already exists
         const existingParent = await prisma.parent.findFirst({
             where: {
                 OR: [
-                    { email },
                     { phone }
                 ]
             }
@@ -91,7 +90,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         if (existingParent) {
             return NextResponse.json(
-                { error: existingParent.email === email ? 'Email already exists' : 'Phone already exists' },
+                { error: 'Phone already exists' },
                 { status: 409 }
             );
         }
@@ -111,7 +110,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 religion,
                 state,
                 lga,
-                email,
                 phone,
                 address,
                 avarta,
