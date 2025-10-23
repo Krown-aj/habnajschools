@@ -132,9 +132,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Check class capacity
-    if (classData.capacity && classData._count.students >= classData.capacity) {
-      return NextResponse.json({ error: 'Class capacity exceeded' }, { status: 400 });
-    }
+    /*  if (classData.capacity && classData._count.students >= classData.capacity) {
+       return NextResponse.json({ error: 'Class capacity exceeded' }, { status: 400 });
+     } */
 
     // Generate admission number
     const existingAdmissions = await prisma.student.findMany({

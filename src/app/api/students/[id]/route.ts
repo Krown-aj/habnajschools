@@ -155,14 +155,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             }
 
             // Check class capacity (exclude current student from count if updating their class)
-            const currentStudent = await prisma.student.findUnique({
-                where: { id: id },
-                select: { classid: true }
-            });
-            const isSameClass = currentStudent?.classid === classid;
-            if (classData.capacity && classData._count.students >= classData.capacity && !isSameClass) {
-                return NextResponse.json({ error: 'Class capacity exceeded' }, { status: 400 });
-            }
+            /*  const currentStudent = await prisma.student.findUnique({
+                 where: { id: id },
+                 select: { classid: true }
+             });
+             const isSameClass = currentStudent?.classid === classid;
+             if (classData.capacity && classData._count.students >= classData.capacity && !isSameClass) {
+                 return NextResponse.json({ error: 'Class capacity exceeded' }, { status: 400 });
+             } */
         }
 
         const updateData: any = {};
