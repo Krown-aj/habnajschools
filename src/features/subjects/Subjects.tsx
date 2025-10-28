@@ -65,7 +65,7 @@ const Subjects: React.FC<SubjectsProps> = ({
             const res = await fetch("/api/subjects");
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            setSubjects(data?.data);
+            setSubjects(data?.data || []);
         } catch (err) {
             show("error", "Fetch Error", "Failed to fetch subjects record, please try again.");
         } finally {
@@ -84,7 +84,7 @@ const Subjects: React.FC<SubjectsProps> = ({
         return res;
     };
 
-    // A helper function to confirm user's action
+    // Confirm deletion
     const confirmDelete = useCallback(
         (ids: string[]) => {
             confirmDialog({
@@ -120,7 +120,7 @@ const Subjects: React.FC<SubjectsProps> = ({
         [show]
     );
 
-    // A helper function to delete single record
+    // Delete single record
     const deleteOne = useCallback(
         (id: string) => {
             confirmDelete([id]);
@@ -129,22 +129,20 @@ const Subjects: React.FC<SubjectsProps> = ({
         [confirmDelete]
     );
 
-    // A helper function to handle navigation to new page
+    // Navigation handlers
     const handleNew = useCallback(() => {
         router.push(`/dashboard/${role}/subjects/new`);
     }, [role]);
 
-    // A helper function to handle navigation to view page
     const handleView = useCallback((currentSubject: any) => {
         router.push(`/dashboard/${role}/subjects/${currentSubject?.id}/view`);
     }, [role]);
 
-    // A helper function to handle navigation to edit page
     const handleEdit = useCallback((currentSubject: any) => {
         router.push(`/dashboard/${role}/subjects/${currentSubject?.id}/edit`);
     }, [role]);
 
-    // A helper function to display action body
+    // Action button (ellipsis)
     const actionBody = useCallback(
         (row: any) => (
             <Button
@@ -159,7 +157,7 @@ const Subjects: React.FC<SubjectsProps> = ({
         []
     );
 
-    // A helper function to display context menu
+    // Overlay menu actions
     const getOverlayActions = useCallback((currentSubject: any) => {
         return [
             {
@@ -178,9 +176,36 @@ const Subjects: React.FC<SubjectsProps> = ({
                 action: () => currentSubject && deleteOne(currentSubject.id)
             },
         ];
-    }, [role, deleteOne, handleEdit, handleView]);
+    }, [handleView, handleEdit, deleteOne]);
 
-    // Loading effect
+    // Teachers body template (same style as traits/assessments)
+    const teachersBody = useCallback((rowData: any) => {
+        const teachers = rowData.teachers || [];
+        const count = teachers.length;
+
+        if (count === 0) return <span className="text-gray-400">–</span>;
+
+        const fullNames = teachers.map((t: any) =>
+            [t.title, t.firstname, t.othername, t.surname]
+                .filter(Boolean)
+                .join(" ")
+                .trim()
+        );
+
+        const preview = fullNames.slice(0, 2).join(", ");
+        const more = count > 2 ? `... (+${count - 2})` : "";
+
+        return (
+            <div title={fullNames.join(", ")} className="cursor-default">
+                <div className="text-sm font-medium">{count}</div>
+                <div className="text-xs text-gray-500 truncate max-w-xs">
+                    {preview}{more}
+                </div>
+            </div>
+        );
+    }, []);
+
+    // Loading state
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -197,6 +222,7 @@ const Subjects: React.FC<SubjectsProps> = ({
             {(deletingIds.length > 0 || updatingIds.length > 0) && (
                 <Spinner visible onHide={() => { setDeletingIds([]); setUpdatingIds([]); }} />
             )}
+
             <div className="bg-white rounded-md shadow-md space-y-4">
                 {/* Page header */}
                 <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 p-4">
@@ -221,14 +247,16 @@ const Subjects: React.FC<SubjectsProps> = ({
                     )}
                 </header>
 
-                {/* Search input section */}
+                {/* Search input */}
                 <div className="px-2 border-t border-gray-200 py-4">
                     <span className="p-input-icon-left block">
                         <i className="pi pi-search ml-2" />
                         <InputText
                             placeholder="Search subjects..."
                             onInput={e =>
-                                setFilters({ global: { value: e.currentTarget.value, matchMode: FilterMatchMode.CONTAINS } })
+                                setFilters({
+                                    global: { value: e.currentTarget.value, matchMode: FilterMatchMode.CONTAINS }
+                                })
                             }
                             className="w-full rounded focus:ring-1 focus:ring-cyan-500 focus:outline-none focus:outline-0 px-8 py-2 transition-all duration-300"
                         />
@@ -259,22 +287,21 @@ const Subjects: React.FC<SubjectsProps> = ({
                         <Column field="category" header="Category" sortable />
                         <Column
                             header="Teachers"
-                            body={(rowData) =>
-                                rowData.teachers?.length > 0
-                                    ? rowData.teachers
-                                        .map((teacher: any) =>
-                                            `${teacher.title || ""} ${teacher.firstname} ${teacher.othername || ""} ${teacher.surname}`.trim()
-                                        )
-                                        .join(", ")
-                                    : "–"
-                            }
+                            body={teachersBody}
+                            style={{ minWidth: "180px" }}
                         />
                         {permit && (
-                            <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
+                            <Column
+                                body={actionBody}
+                                header="Actions"
+                                style={{ textAlign: "center", width: "4rem" }}
+                            />
                         )}
                     </DataTable>
                 </div>
             </div>
+
+            {/* Bulk delete */}
             {selected.length > 0 && (
                 <div className="mt-4">
                     <Button
@@ -288,6 +315,7 @@ const Subjects: React.FC<SubjectsProps> = ({
                 </div>
             )}
 
+            {/* Context menu */}
             <OverlayPanel ref={panel} className="shadow-lg rounded-md">
                 <div className="flex flex-col w-48 bg-white rounded-md">
                     {current && getOverlayActions(current).map(({ label, icon, action }) => (

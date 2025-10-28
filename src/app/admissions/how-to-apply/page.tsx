@@ -99,10 +99,10 @@ const ApplyPage: React.FC = () => {
                 desc: "Below are the forms you can obtain and their respective costs.",
                 icon: FaTags,
                 details: [
-                    "Nursery Section — ₦2,500",
+                    "Nursery Section — ₦3,000",
                     "Primary Section — ₦3,000",
                     "Secondary Section (JSS/SSS) — ₦5,000",
-                    "Islamiyya School — ₦1,000",
+                    "Madrasah School — ₦1,000",
                 ],
             },
         ],
