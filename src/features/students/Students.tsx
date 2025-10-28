@@ -1,6 +1,8 @@
+"use client";
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { FaPlus } from "react-icons/fa";
-import { Trash2, Edit, Eye, Book, Users } from "lucide-react";
+import { Trash2, Edit, Eye } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "primereact/datatable";
@@ -58,14 +60,22 @@ const Students: React.FC<StudentsProps> = ({
         toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
     }, []);
 
-    // Fetch students data
+    // Fetch students data and add searchable fields (fullname, className)
     const fetchData = async () => {
         setLoading(true);
         try {
             const res = await fetch("/api/students");
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            setStudents(data?.data);
+
+            // Add computed searchable fields so global & column filtering works as expected
+            const mapped = (data?.data || []).map((s: any) => ({
+                ...s,
+                fullname: `${s.firstname || ''} ${s.othername || ''} ${s.surname || ''}`.replace(/\s+/g, ' ').trim(),
+                className: s.class?.name || '–'
+            }));
+
+            setStudents(mapped);
         } catch (err) {
             show("error", "Fetch Error", "Failed to fetch students record, please try again.");
         } finally {
@@ -202,7 +212,7 @@ const Students: React.FC<StudentsProps> = ({
                 <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 p-4">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center justify-center w-8 h-8 sm:w-16 sm:h-16 rounded-2xl bg-indigo-50 shadow-sm text-indigo-600">
-                            <Users className="w-6 h-6 sm:w-8 sm:h-8" />
+                            <svg className="w-6 h-6 sm:w-8 sm:h-8" viewBox="0 0 24 24" fill="none" />
                         </div>
                         <div>
                             <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
@@ -245,6 +255,8 @@ const Students: React.FC<StudentsProps> = ({
                         stripedRows
                         filters={filters}
                         filterDisplay="menu"
+                        // Make sure global filter searches these fields
+                        globalFilterFields={["admissionnumber", "fullname", "gender", "section", "className"]}
                         scrollable
                         scrollHeight="400px"
                         dataKey="id"
@@ -255,23 +267,30 @@ const Students: React.FC<StudentsProps> = ({
                         selectionMode="multiple"
                     >
                         {permit && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
+
                         <Column field="admissionnumber" header="Admission Number" sortable />
+
                         <Column
+                            field="fullname"
                             header="Name"
-                            body={(rowData) =>
-                                rowData
-                                    ? `${rowData.firstname} ${rowData.othername || ''} ${rowData.surname}`.trim()
-                                    : '–'
-                            }
+                            body={(rowData) => rowData?.fullname || '–'}
                             sortable
+                            filter
+                            filterMatchMode={FilterMatchMode.CONTAINS}
                         />
+
                         <Column field="gender" header="Gender" sortable />
                         <Column field="section" header="Section" sortable />
+
                         <Column
+                            field="className"
                             header="Class"
-                            body={(rowData) => rowData.class?.name || '–'}
+                            body={(rowData) => rowData?.className || '–'}
                             sortable
+                            filter
+                            filterMatchMode={FilterMatchMode.CONTAINS}
                         />
+
                         {permit && (
                             <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                         )}

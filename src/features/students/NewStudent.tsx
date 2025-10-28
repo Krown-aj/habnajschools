@@ -135,7 +135,7 @@ const NewStudent: React.FC = () => {
                 const parentData = await parentRes.json();
                 if (!Array.isArray(parentData.data)) throw new Error("Unexpected response shape — expected array for parents");
                 const parentOpts: Option[] = parentData.data.map((parent: any) => ({
-                    label: `${parent.firstname} ${parent.surname}`,
+                    label: `${parent.title ? parent.title + " " : ""}${parent.firstname} ${parent.surname} ${parent.othername ? parent.othername : ""}`.trim(),
                     value: parent.id,
                 }));
                 if (mounted) setParents(parentOpts);

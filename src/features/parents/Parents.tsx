@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { FaPlus } from "react-icons/fa";
-import { Trash2, Edit, Eye, Book, Users } from "lucide-react";
+import { Trash2, Edit, Eye, Users } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "primereact/datatable";
@@ -60,14 +60,21 @@ const Parents: React.FC<ParentsProps> = ({
         toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
     }, []);
 
-    // Fetch parents data
+    // Fetch parents data and compute fullname for searching
     const fetchData = async () => {
         setLoading(true);
         try {
             const res = await fetch("/api/parents");
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            setParents(data?.data);
+
+            const mapped = (data?.data || []).map((p: any) => ({
+                ...p,
+                fullname: `${p.title || ''} ${p.firstname || ''} ${p.othername || ''} ${p.surname || ''}`.replace(/\s+/g, ' ').trim(),
+                phoneNumber: p.phone || '–'
+            }));
+
+            setParents(mapped);
         } catch (err) {
             show("error", "Fetch Error", "Failed to fetch parents record, please try again.");
         } finally {
@@ -247,6 +254,8 @@ const Parents: React.FC<ParentsProps> = ({
                         stripedRows
                         filters={filters}
                         filterDisplay="menu"
+                        // ensure the global filter covers name, phone and gender
+                        globalFilterFields={["fullname", "phoneNumber", "gender"]}
                         scrollable
                         scrollHeight="400px"
                         dataKey="id"
@@ -257,17 +266,19 @@ const Parents: React.FC<ParentsProps> = ({
                         selectionMode="multiple"
                     >
                         {permit && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
+
                         <Column
+                            field="fullname"
                             header="Name"
-                            body={(rowData) =>
-                                rowData
-                                    ? `${rowData.title || ""} ${rowData.firstname} ${rowData.othername || ''} ${rowData.surname}`.trim()
-                                    : '–'
-                            }
+                            body={(rowData) => rowData?.fullname || '–'}
                             sortable
+                            filter
+                            filterMatchMode={FilterMatchMode.CONTAINS}
                         />
-                        <Column field="phone" header="Phone" />
-                        <Column field="gender" header="Gender" />
+
+                        <Column field="phoneNumber" header="Phone" sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
+                        <Column field="gender" header="Gender" sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
+
                         {permit && (
                             <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                         )}
