@@ -282,14 +282,14 @@ const Subjects: React.FC<SubjectsProps> = ({
                         emptyMessage="No subjects found."
                         selectionMode="multiple"
                     >
-                        <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />
+                        {permit && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
                         <Column field="name" header="Name" sortable />
                         <Column field="category" header="Category" sortable />
-                        <Column
+                        {permit && <Column
                             header="Teachers"
                             body={teachersBody}
                             style={{ minWidth: "180px" }}
-                        />
+                        />}
                         {permit && (
                             <Column
                                 body={actionBody}

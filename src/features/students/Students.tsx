@@ -44,7 +44,7 @@ const Students: React.FC<StudentsProps> = ({
     });
 
     const role = session?.user?.role || 'Guest';
-    const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin' || role.toLowerCase() === 'management' || role.toLowerCase() === 'teacher';
+    const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin' || role.toLowerCase() === 'management';
 
     // Fetch students data on mount
     useEffect(() => {
@@ -171,21 +171,30 @@ const Students: React.FC<StudentsProps> = ({
 
     // A helper function to display context menu
     const getOverlayActions = useCallback((currentStudent: any) => {
+        if (permit) {
+            return [
+                {
+                    label: "View",
+                    icon: <Eye className="w-4 h-4 mr-2" />,
+                    action: () => currentStudent && handleView(currentStudent)
+                },
+                {
+                    label: "Edit",
+                    icon: <Edit className="w-4 h-4 mr-2" />,
+                    action: () => currentStudent && handleEdit(currentStudent)
+                },
+                {
+                    label: "Delete",
+                    icon: <Trash2 className="w-4 h-4 mr-2" />,
+                    action: () => currentStudent && deleteOne(currentStudent.id)
+                }
+            ];
+        }
         return [
             {
                 label: "View",
                 icon: <Eye className="w-4 h-4 mr-2" />,
                 action: () => currentStudent && handleView(currentStudent)
-            },
-            {
-                label: "Edit",
-                icon: <Edit className="w-4 h-4 mr-2" />,
-                action: () => currentStudent && handleEdit(currentStudent)
-            },
-            {
-                label: "Delete",
-                icon: <Trash2 className="w-4 h-4 mr-2" />,
-                action: () => currentStudent && deleteOne(currentStudent.id)
             },
         ];
     }, [role, deleteOne, handleEdit, handleView]);
@@ -291,9 +300,8 @@ const Students: React.FC<StudentsProps> = ({
                             filterMatchMode={FilterMatchMode.CONTAINS}
                         />
 
-                        {permit && (
-                            <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
-                        )}
+
+                        <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                     </DataTable>
                 </div>
             </div>

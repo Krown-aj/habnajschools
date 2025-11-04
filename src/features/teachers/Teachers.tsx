@@ -1,6 +1,8 @@
+"use client";
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { FaPlus } from "react-icons/fa";
-import { Trash2, Edit, Eye, Book, Users } from "lucide-react";
+import { Trash2, Edit, Eye, Users } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "primereact/datatable";
@@ -58,14 +60,24 @@ const Teachers: React.FC<TeachersProps> = ({
         toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
     }, []);
 
-    // Fetch teachers data
+    // Fetch teachers data and compute searchable fields
     const fetchData = async () => {
         setLoading(true);
         try {
             const res = await fetch("/api/teachers");
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            setTeachers(data?.data);
+
+            const mapped = (data?.data || []).map((t: any) => ({
+                ...t,
+                fullname: `${t.title || ''} ${t.firstname || ''} ${t.othername || ''} ${t.surname || ''}`.replace(/\s+/g, ' ').trim(),
+                emailAddress: t.email || t.emailAddress || t.contactEmail || '',
+                phoneNumber: t.phone || t.phoneNumber || t.contact || '',
+                qualificationText: t.qualification || '',
+                genderText: t.gender || ''
+            }));
+
+            setTeachers(mapped);
         } catch (err) {
             show("error", "Fetch Error", "Failed to fetch teachers record, please try again.");
         } finally {
@@ -245,6 +257,8 @@ const Teachers: React.FC<TeachersProps> = ({
                         stripedRows
                         filters={filters}
                         filterDisplay="menu"
+                        // enable global filter to search these computed fields
+                        globalFilterFields={["fullname", "emailAddress", "phoneNumber", "qualificationText", "genderText"]}
                         scrollable
                         scrollHeight="400px"
                         dataKey="id"
@@ -255,21 +269,21 @@ const Teachers: React.FC<TeachersProps> = ({
                         selectionMode="multiple"
                     >
                         <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />
+
                         <Column
+                            field="fullname"
                             header="Name"
-                            body={(rowData) =>
-                                rowData
-                                    ? `${rowData.title || ""} ${rowData.firstname} ${rowData.othername || ''} ${rowData.surname}`.trim()
-                                    : '–'
-                            }
+                            body={(rowData) => rowData?.fullname || `${rowData?.firstname || ''} ${rowData?.surname || ''}`.trim() || '–'}
                             sortable
+                            filter
+                            filterMatchMode={FilterMatchMode.CONTAINS}
                         />
-                        <Column field="email" header="Email" />
-                        <Column field="phone" header="Phone" />
-                        <Column field="gender" header="Gender" />
-                        <Column header="Qualification" body={(rowData) =>
-                            rowData.qualification || '–'
-                        } />
+
+                        <Column field="emailAddress" header="Email" sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
+                        <Column field="phoneNumber" header="Phone" sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
+                        <Column field="genderText" header="Gender" sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
+                        <Column field="qualificationText" header="Qualification" body={(rowData) => rowData?.qualificationText || '–'} sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
+
                         {permit && (
                             <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                         )}

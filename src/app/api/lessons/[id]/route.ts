@@ -1,27 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
 import { Prisma } from '@/generated/prisma';
-import { lessonUpdateSchema } from '@/lib/schemas/index';
-import { validateSession, validateRequestBody, handleError, successResponse, checkResourceExists, UserRole } from '@/lib/utils/api-helpers';
+import prisma from '@/lib/prisma';
+import { lessonSchema } from '@/lib/schemas/index';
+import { validateSession, validateRequestBody, handleError, successResponse, UserRole } from '@/lib/utils/api-helpers';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+function buildConflictPayload(lesson: any) {
+    if (!lesson) return null;
+    return {
+        id: lesson.id,
+        name: lesson.name,
+        day: lesson.day,
+        startTime: lesson.startTime,
+        endTime: lesson.endTime,
+        teacherid: lesson.teacherid,
+        classid: lesson.classid,
+        subjectid: lesson.subjectid,
+    };
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
-        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.PARENT]);
         if (validation.error) return validation.error;
 
         const { userRole, session } = validation;
-
-        // Check if the lesson exists
-        const resourceCheck = await checkResourceExists(
-            prisma.lesson,
-            id,
-            'Lesson not found'
-        );
-        if (resourceCheck.error) return resourceCheck.error;
+        const where: Prisma.LessonWhereInput = {};
 
         // Restrict access based on user role
-        const where: Prisma.LessonWhereInput = { id: parseInt(id) };
         if (userRole === UserRole.TEACHER) {
             where.OR = [
                 { teacherid: session!.user.id },
@@ -35,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             };
         }
 
-        const lesson = await prisma.lesson.findFirst({
+        const lessons = await prisma.lesson.findMany({
             where,
             select: {
                 id: true,
@@ -43,9 +48,137 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 day: true,
                 startTime: true,
                 endTime: true,
-                subjectid: true,
-                classid: true,
-                teacherid: true,
+                teacher: {
+                    select: {
+                        id: true,
+                        firstname: true,
+                        surname: true,
+                        othername: true,
+                    }
+                },
+                class: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }, subject: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                },
+                _count: {
+                    select: {
+                        attendances: true
+                    }
+                }
+            },
+            // schedule-friendly ordering
+            orderBy: [
+                { day: 'asc' },
+                { startTime: 'asc' }
+            ]
+        });
+
+        return successResponse({ data: lessons });
+    } catch (error) {
+        return handleError(error, 'Failed to fetch lessons');
+    }
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+    try {
+        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
+        if (validation.error) return validation.error;
+
+        const bodyValidation = await validateRequestBody(request, lessonSchema);
+        if (bodyValidation.error) return bodyValidation.error;
+
+        const { name, day, startTime, endTime, subjectid, classid, teacherid } = bodyValidation.data!;
+
+        // Validate subjectid, classid, and teacherid
+        const subject = await prisma.subject.findUnique({ where: { id: subjectid } });
+        if (!subject) {
+            return NextResponse.json({ error: 'Invalid subject ID' }, { status: 400 });
+        }
+
+        const classData = await prisma.class.findUnique({ where: { id: classid } });
+        if (!classData) {
+            return NextResponse.json({ error: 'Invalid class ID' }, { status: 400 });
+        }
+
+        const teacher = await prisma.teacher.findUnique({ where: { id: teacherid } });
+        if (!teacher) {
+            return NextResponse.json({ error: 'Invalid teacher ID' }, { status: 400 });
+        }
+
+        // Validate times are valid ISO datetimes and start < end
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
+            return NextResponse.json(
+                { error: 'Invalid start Time.' },
+                { status: 400 }
+            );
+        }
+
+        // Overlap if existing.start < newEnd && existing.end > newStart
+        const conflictingLesson = await prisma.lesson.findFirst({
+            where: {
+                teacherid,
+                day,
+                AND: [
+                    { startTime: { lt: end.toISOString() } },
+                    { endTime: { gt: start.toISOString() } }
+                ]
+            }
+        });
+
+        if (conflictingLesson) {
+            return NextResponse.json(
+                {
+                    error: 'Scheduling conflict: teacher already has a lesson at this time.',
+                    conflict: buildConflictPayload(conflictingLesson)
+                },
+                { status: 409 }
+            );
+        }
+
+        const newLesson = await prisma.lesson.create({
+            data: {
+                name,
+                day,
+                startTime,
+                endTime,
+                subjectid,
+                classid,
+                teacherid
+            },
+            select: {
+                id: true,
+                name: true,
+                day: true,
+                startTime: true,
+                endTime: true,
+                teacher: {
+                    select: {
+                        id: true,
+                        firstname: true,
+                        surname: true,
+                        othername: true,
+                    }
+                },
+                class: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }, subject: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                },
                 _count: {
                     select: {
                         attendances: true
@@ -54,131 +187,43 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             }
         });
 
-        if (!lesson) {
-            return NextResponse.json({ error: 'Access denied or lesson not found' }, { status: 403 });
-        }
-
-        return successResponse(lesson);
+        return successResponse(newLesson, 201);
     } catch (error) {
-        return handleError(error, 'Failed to fetch lesson');
+        return handleError(error, 'Failed to create lesson');
     }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
     try {
-        const { id } = await params;
-        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
-        if (validation.error) return validation.error;
-
-        const resourceCheck = await checkResourceExists(
-            prisma.lesson,
-            id,
-            'Lesson not found'
-        );
-        if (resourceCheck.error) return resourceCheck.error;
-
-        const bodyValidation = await validateRequestBody(request, lessonUpdateSchema);
-        if (bodyValidation.error) return bodyValidation.error;
-
-        const { name, day, startTime, endTime, subjectid, classid, teacherid } = bodyValidation.data!;
-
-        // Validate subjectid, classid, and teacherid if provided
-        if (subjectid) {
-            const subject = await prisma.subject.findUnique({ where: { id: subjectid } });
-            if (!subject) {
-                return NextResponse.json({ error: 'Invalid subject ID' }, { status: 400 });
-            }
-        }
-
-        if (classid) {
-            const classData = await prisma.class.findUnique({ where: { id: classid } });
-            if (!classData) {
-                return NextResponse.json({ error: 'Invalid class ID' }, { status: 400 });
-            }
-        }
-
-        if (teacherid) {
-            const teacher = await prisma.teacher.findUnique({ where: { id: teacherid } });
-            if (!teacher) {
-                return NextResponse.json({ error: 'Invalid teacher ID' }, { status: 400 });
-            }
-        }
-
-        // Check for conflicting lessons if teacherid, day, or time fields are updated
-        if (teacherid || day || startTime || endTime) {
-            const existingLesson = await prisma.lesson.findFirst({
-                where: {
-                    teacherid: teacherid || undefined,
-                    day: day || undefined,
-                    OR: [
-                        {
-                            AND: [
-                                { startTime: { lte: endTime || undefined } },
-                                { endTime: { gte: startTime || undefined } }
-                            ]
-                        }
-                    ],
-                    id: { not: parseInt(id) }
-                }
-            });
-
-            if (existingLesson) {
-                return NextResponse.json(
-                    { error: 'Teacher already has a lesson scheduled at this time' },
-                    { status: 409 }
-                );
-            }
-        }
-
-        const updateData: any = {};
-        if (name) updateData.name = name;
-        if (day) updateData.day = day;
-        if (startTime) updateData.startTime = startTime;
-        if (endTime) updateData.endTime = endTime;
-        if (subjectid) updateData.subjectid = subjectid;
-        if (classid) updateData.classid = classid;
-        if (teacherid) updateData.teacherid = teacherid;
-
-        const updatedLesson = await prisma.lesson.update({
-            where: { id: parseInt(id) },
-            data: updateData,
-            select: {
-                id: true,
-                name: true,
-                day: true,
-                startTime: true,
-                endTime: true,
-                subjectid: true,
-                classid: true,
-                teacherid: true,
-            }
-        });
-
-        return successResponse(updatedLesson);
-    } catch (error) {
-        return handleError(error, 'Failed to update lesson');
-    }
-}
-
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
-    try {
-        const { id } = await params;
         const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
 
-        const resourceCheck = await checkResourceExists(
-            prisma.lesson,
-            id,
-            'Lesson not found'
-        );
-        if (resourceCheck.error) return resourceCheck.error;
+        const url = new URL(request.url);
+        const ids = url.searchParams.getAll('ids');
 
-        await prisma.lesson.delete({
-            where: { id: parseInt(id) }
+        if (ids.length === 0) {
+            return NextResponse.json({ error: 'No IDs provided' }, { status: 400 });
+        }
+
+        // convert and validate numeric IDs
+        const numericIds = ids.map(id => {
+            const n = Number(id);
+            return Number.isInteger(n) ? n : NaN;
         });
 
-        return successResponse({ message: 'Lesson deleted successfully' });
+        if (numericIds.some(Number.isNaN)) {
+            return NextResponse.json({ error: 'One or more IDs are invalid', invalidIds: ids.filter((_, i) => Number.isNaN(numericIds[i])) }, { status: 400 });
+        }
+
+        const result = await prisma.lesson.deleteMany({
+            where: { id: { in: numericIds } }
+        });
+
+        return successResponse({
+            deleted: result.count,
+            message: `Successfully deleted ${result.count} lesson(s)`
+        });
     } catch (error) {
-        return handleError(error, 'Failed to delete lesson');
+        return handleError(error, 'Failed to delete lessons');
     }
 }

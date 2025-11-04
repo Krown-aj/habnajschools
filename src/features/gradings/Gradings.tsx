@@ -214,32 +214,31 @@ const Gradings: React.FC<GradingsProps> = ({
 
     // A helper function to display action body
     const actionBody = useCallback(
-        (row: any) => (
-            <Button
-                icon="pi pi-ellipsis-v"
-                className="p-button-text hover:bg-transparent hover:border-none hover:shadow-none"
-                onClick={e => {
-                    setCurrent(row);
-                    panel.current?.toggle(e);
-                }}
-            />
-        ),
-        []
+        (row: any) => {
+            // If user is a teacher and the grading is published, don't show actions
+            if (teacher && row?.published) return null;
+
+            return (
+                <Button
+                    icon="pi pi-ellipsis-v"
+                    className="p-button-text hover:bg-transparent hover:border-none hover:shadow-none"
+                    onClick={e => {
+                        setCurrent(row);
+                        panel.current?.toggle(e);
+                    }}
+                />
+            );
+        },
+        [teacher]
     );
 
     // Build overlay actions depending on role
     const getOverlayActions = useCallback((currentGrading: any) => {
         const isTeacher = teacher;
 
-        // Teacher: only View, and Grade/MarkTraits if not published
+        // Teacher: only Grade/MarkTraits if not published
         if (isTeacher) {
-            const teacherActions: Array<{ label: string; icon: React.ReactNode; action: () => void }> = [
-                {
-                    label: "View",
-                    icon: <Eye className="w-4 h-4 mr-2" />,
-                    action: () => currentGrading && handleView(currentGrading),
-                },
-            ];
+            const teacherActions: Array<{ label: string; icon: React.ReactNode; action: () => void }> = [];
 
             if (!currentGrading?.published) {
                 teacherActions.push({
@@ -283,7 +282,6 @@ const Gradings: React.FC<GradingsProps> = ({
 
         // Add Grade and Mark Traits options only if the grading is not published
         if (!currentGrading?.published) {
-            // Insert Grade and Mark Traits before the Publish/Unpublish action (if present)
             const publishIndex = actions.findIndex(a => a.label === (currentGrading?.published ? "Unpublish" : "Publish"));
             const insertIndex = publishIndex >= 0 ? publishIndex : actions.length;
 
@@ -391,11 +389,12 @@ const Gradings: React.FC<GradingsProps> = ({
                         emptyMessage="No gradings found."
                         selectionMode="multiple"
                     >
-                        <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />
+                        {permit && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
                         <Column field="title" header="Title" sortable />
                         <Column field="session" header="Session" sortable />
                         <Column field="term" header="Term" sortable />
                         <Column field="published" header="Status" body={statusBody} sortable />
+                        {/* Actions column: visible to admins OR teachers, but teacher cells are empty when grading is published */}
                         {(permit || teacher) && (
                             <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                         )}

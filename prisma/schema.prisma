@@ -565,6 +565,7 @@ enum NewsCategory {
   EDUCATION
   COMMUNITY
   GENERAL
+  HOLYDAY
 }
 
 enum NewsStatus {

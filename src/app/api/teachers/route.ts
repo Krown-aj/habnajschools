@@ -36,6 +36,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 phone: true,
                 gender: true,
                 qualification: true,
+                section: true,
                 active: true,
                 subjects: {
                     select: {

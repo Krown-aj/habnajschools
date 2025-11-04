@@ -1,118 +1,134 @@
-import React from "react";
-import { FaCog, FaPlus, FaBell, FaEye, FaBook } from "react-icons/fa";
+'use client';
 
-type LessonsProps = {
-    title?: string;
-    subtitle?: string;
-    ctaLabel?: string;
-    showSidebar?: boolean;
-};
+import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { Button } from 'primereact/button';
+import { Dropdown } from 'primereact/dropdown';
+import LessonsTable from './LessonsTable';
+import NewLesson from './NewLesson';
+import { fetchClasses as fetchClassesApi } from '@/lib/api/common';
+import { fetchLessonsByClass as fetchLessonsByClassApi } from '@/lib/api/lessons';
+import type { Class as ClassType, Lesson } from '@/types';
 
-const Lessons: React.FC<LessonsProps> = ({
-    title = "Feature coming soon",
-    subtitle = "This section is currently being tested. Check back later or preview the layout.",
-    ctaLabel = "Get notified",
-    showSidebar = true,
-}) => {
-    const today = new Date().toLocaleDateString();
+export default function Lessons(): React.ReactElement {
+    const { data: session } = useSession();
+
+    const [classes, setClasses] = useState<ClassType[]>([]);
+    const [classOptions, setClassOptions] = useState<{ label: string; value: string }[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+    const [lessons, setLessons] = useState<Lesson[]>([]);
+    const [loadingLessons, setLoadingLessons] = useState(false);
+    const [loadingClasses, setLoadingClasses] = useState(false);
+    const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+    const role = (session?.user?.role as string) || 'Guest';
+    const isAdminOrSuper = ['super', 'admin', 'management'].includes(role.toLowerCase());
+
+    useEffect(() => {
+        const loadClasses = async () => {
+            setLoadingClasses(true);
+            try {
+                const data = await fetchClassesApi();
+                const list = Array.isArray(data) ? data : [];
+                setClasses(list);
+                setClassOptions(list.map((c) => ({ label: c.name, value: c.id })));
+            } catch (err) {
+                console.error('Failed to load classes', err);
+                setClasses([]);
+                setClassOptions([]);
+            } finally {
+                setLoadingClasses(false);
+            }
+        };
+        loadClasses();
+    }, []);
+
+    useEffect(() => {
+        if (!selectedClassId) {
+            setLessons([]);
+            return;
+        }
+
+        setLoadingLessons(true);
+        (async () => {
+            try {
+                const data = await fetchLessonsByClassApi(selectedClassId);
+                console.log('Fetched lessons data:', data);
+                const list = Array.isArray(data) ? data : (data && Array.isArray((data as any).data) ? (data as any).data : []);
+                setLessons(list);
+                console.log('Loaded lessons for class:', selectedClassId, list);
+            } catch (err) {
+                console.error('Failed to fetch lessons', err);
+                setLessons([]);
+            } finally {
+                setLoadingLessons(false);
+            }
+        })();
+    }, [selectedClassId]);
+
+    const selectedClass = classes.find((c) => c.id === selectedClassId) ?? null;
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 p-6 lg:p-12">
-            <div className="max-w-6xl mx-auto">
-                <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-50 shadow-sm text-indigo-600">
-                            <FaCog className="w-8 h-8" />
-                        </div>
-
-                        <div>
-                            <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-                            <p className="text-sm text-gray-500">{subtitle}</p>
-                        </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                        <button
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-2xl shadow-sm text-sm font-medium hover:shadow-md transition"
-                            aria-disabled
-                        >
-                            <FaPlus className="w-4 h-4" />
-                            Create
-                        </button>
-
-                        <button className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-2xl shadow hover:shadow-lg text-sm font-medium transition opacity-80 cursor-not-allowed" disabled>
-                            <FaBell className="w-4 h-4" />
-                            Notify
-                        </button>
-                    </div>
-                </header>
-
-                <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <article className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-medium text-gray-900">Under Testing</h2>
-                            <span className="text-sm text-indigo-600 font-medium">Preview</span>
-                        </div>
-
-                        <p className="text-gray-600 mb-6">{subtitle}</p>
-
-                        <div className="space-y-3">
-                            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                                <div className="h-3 rounded-full bg-indigo-500 w-1/3 transition-all" />
-                            </div>
-
-                            <div className="flex items-center gap-3 text-sm text-gray-500">
-                                <FaEye className="w-4 h-4" />
-                                <span>Preview layout</span>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <button className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium border border-indigo-100 inline-flex items-center gap-2">
-                                    <FaEye />
-                                    Preview layout
-                                </button>
-                                <button className="px-4 py-2 bg-white text-gray-700 rounded-lg text-sm font-medium border border-gray-200 inline-flex items-center gap-2">
-                                    <FaBook />
-                                    Docs
-                                </button>
-                            </div>
-                        </div>
-                    </article>
-
-                    {showSidebar && (
-                        <aside className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <h3 className="text-sm font-medium text-gray-900 mb-3">Quick info</h3>
-                            <dl className="text-sm text-gray-600 space-y-3">
-                                <div>
-                                    <dt className="font-medium text-gray-800">Items</dt>
-                                    <dd className="text-gray-500">—</dd>
-                                </div>
-
-                                <div>
-                                    <dt className="font-medium text-gray-800">Pending</dt>
-                                    <dd className="text-gray-500">—</dd>
-                                </div>
-
-                                <div>
-                                    <dt className="font-medium text-gray-800">Last update</dt>
-                                    <dd className="text-gray-500">{today}</dd>
-                                </div>
-                            </dl>
-
-                            <div className="mt-6">
-                                <button className="w-full px-4 py-2 bg-indigo-600 text-white rounded-2xl text-sm font-semibold hover:brightness-110 transition flex items-center justify-center gap-2">
-                                    <FaBell />
-                                    {ctaLabel}
-                                </button>
-                            </div>
-                        </aside>
-                    )}
-                </section>
-
-                <footer className="mt-10 text-center text-xs text-gray-400">© {new Date().getFullYear()} — Habnaj International Schools</footer>
+        <div className="p-6 max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-gray-900">Class Timetable</h1>
+                {isAdminOrSuper && (
+                    <Button
+                        label="Create Lesson"
+                        icon="pi pi-plus"
+                        onClick={() => setShowCreateDialog(true)}
+                        className="p-button-success"
+                    />
+                )}
             </div>
-        </main>
-    );
-};
 
-export default Lessons;
+            <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Class</label>
+
+                <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                        <Dropdown
+                            value={selectedClassId}
+                            options={classOptions}
+                            onChange={(e) => setSelectedClassId(e.value)}
+                            optionLabel="label"
+                            optionValue="value"
+                            placeholder={loadingClasses ? 'Loading classes...' : 'Choose a class'}
+                            className="w-full md:w-96"
+                            filter
+                            disabled={loadingClasses || classOptions.length === 0}
+                        />
+                    </div>
+
+                    {loadingClasses && <div className="text-sm text-gray-500">Loading classes…</div>}
+                </div>
+
+                {(!loadingClasses && classOptions.length === 0) && (
+                    <div className="text-sm text-yellow-600 mt-2">No classes available — check server response or permissions.</div>
+                )}
+            </div>
+
+            {loadingLessons ? (
+                <div className="flex justify-center py-10">
+                    <i className="pi pi-spin pi-spinner text-4xl text-blue-600"></i>
+                </div>
+            ) : selectedClassId ? (
+                <LessonsTable lessons={lessons} />
+            ) : (
+                <div className="text-center py-10 text-gray-500">Please select a class to view the timetable.</div>
+            )}
+
+            <NewLesson
+                visible={showCreateDialog}
+                onHide={() => setShowCreateDialog(false)}
+                onSuccess={(newLesson: Lesson) => {
+                    if ((newLesson as any)?.class?.id === selectedClassId) {
+                        setLessons((prev) => [...prev, newLesson]);
+                    }
+                    setShowCreateDialog(false);
+                }}
+                selectedClassId={selectedClassId ?? undefined}
+            />
+        </div>
+    );
+}

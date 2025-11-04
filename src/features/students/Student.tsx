@@ -234,6 +234,17 @@ const Student: React.FC<StudentProps> = () => {
                                                 </div>
 
                                                 <div>
+                                                    <dt className="font-semibold">Gender</dt>
+                                                    <dd>{studentData?.gender || "–"}</dd>
+                                                </div>
+
+                                                <div>
+                                                    <dt className="font-semibold">Class</dt>
+                                                    <dd>{studentData?.class?.name || "–"}</dd>
+                                                </div>
+
+
+                                                <div>
                                                     <dt className="font-semibold">Active Status</dt>
                                                     <dd>
                                                         <Badge value={studentData?.active ? "Active" : "Inactive"} severity={studentData?.active ? "success" : "danger"} />

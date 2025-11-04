@@ -36,9 +36,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 day: true,
                 startTime: true,
                 endTime: true,
-                subjectid: true,
-                classid: true,
-                teacherid: true,
+                teacher: {
+                    select: {
+                        id: true,
+                        firstname: true,
+                        surname: true,
+                        othername: true,
+                    }
+                },
+                class: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }, subject: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                },
                 _count: {
                     select: {
                         attendances: true
@@ -119,9 +135,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 day: true,
                 startTime: true,
                 endTime: true,
-                subjectid: true,
-                classid: true,
-                teacherid: true,
+                teacher: {
+                    select: {
+                        id: true,
+                        firstname: true,
+                        surname: true,
+                        othername: true,
+                    }
+                },
+                class: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }, subject: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                },
+                _count: {
+                    select: {
+                        attendances: true
+                    }
+                }
             }
         });
 
