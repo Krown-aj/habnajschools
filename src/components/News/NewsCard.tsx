@@ -48,9 +48,14 @@ export function NewsCard({ article, isPlaceholder }: NewsCardProps) {
                     {article.title}
                 </h3>
 
-                {article.excerpt && (
+                {/* {article.excerpt && (
                     <p className="text-sm text-gray-600 line-clamp-2 mb-3">
                         {article.excerpt}
+                    </p>
+                )} */}
+                {article.content && (
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                        {article.content}
                     </p>
                 )}
 

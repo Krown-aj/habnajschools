@@ -1,8 +1,37 @@
-// lib/data/placeholderNews.ts
 import type { News } from '@/types';
 import { images } from "@/constants";
 
 export const PLACEHOLDER_NEWS: News[] = [
+    {
+        id: 'placeholder',
+        title: 'Career Guidance and Counselling Day',
+        excerpt: `All Teachers, Parents, and Students, This is to inform all teachers, parents, and students that the school will be hosting a Career Guidance and Counselling Day on Wednesday, 19th November 2025.
+        The purpose of this event is to help students explore various career options, understand their interests and strengths, and receive professional advice on educational and career planning.
+        All students are expected to attend in full school uniform. Teachers are requested to guide and assist during the sessions.
+        Venue: School Premises 
+        Time:  9:00am – 1:00pm
+        Your cooperation and participation will be highly appreciated.
+        Signed,
+        Principal 
+        Habnaj International Schools`,
+        content: `All Teachers, Parents, and Students, This is to inform all teachers, parents, and students that the school will be hosting a Career Guidance and Counselling Day on Wednesday, 19th November 2025.
+        The purpose of this event is to help students explore various career options, understand their interests and strengths, and receive professional advice on educational and career planning.
+        All students are expected to attend in full school uniform. Teachers are requested to guide and assist during the sessions.
+        Venue: School Premises 
+        Time:  9:00am – 1:00pm
+        Your cooperation and participation will be highly appreciated.
+        Signed,
+        Principal 
+        Habnaj International Schools`,
+        author: 'Musa Zakariyya',
+        category: 'EVENT',
+        status: 'PUBLISHED',
+        featured: true,
+        image: (images as any).jss2,
+        readTime: 3,
+        publishedAt: '2025-11-13T09:00:00.000Z',
+        createdAt: '2025-11-13T00:00:00.000Z',
+    },
     {
         id: 'placeholder-1',
         title: 'First Term 2025/2026 Mid-Term Break',
@@ -12,7 +41,7 @@ export const PLACEHOLDER_NEWS: News[] = [
         category: 'EVENT',
         status: 'PUBLISHED',
         featured: true,
-        image: (images as any).jss2,
+        image: (images as any).computerroom2,
         readTime: 3,
         publishedAt: '2025-03-15T09:00:00.000Z',
         createdAt: '2025-03-01T00:00:00.000Z',
