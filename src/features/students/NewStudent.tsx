@@ -69,8 +69,6 @@ const NewStudent: React.FC = () => {
     const toast = useRef<Toast>(null);
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [states, setStates] = useState<Option[]>([]);
-    const [lgas, setLgas] = useState<Option[]>([]);
     const [parents, setParents] = useState<Option[]>([]);
     const [classes, setClasses] = useState<Option[]>([]);
     const [uploaded, setUploaded] = useState<{ path: string; id: string; url?: string | null } | null>(null);
@@ -95,8 +93,6 @@ const NewStudent: React.FC = () => {
             religion: "",
             house: "",
             bloodgroup: "",
-            /*  email: "",
-             phone: "", */
             address: "",
             state: "",
             lga: "",
@@ -106,10 +102,7 @@ const NewStudent: React.FC = () => {
         },
     });
 
-    // Watch state changes
-    const selectedState = watch("state");
-
-    // Fetch states, parents, and classes on component mount
+    // Fetch parents, and classes on component mount
     useEffect(() => {
         const controller = new AbortController();
         let mounted = true;
@@ -117,16 +110,6 @@ const NewStudent: React.FC = () => {
         const fetchData = async () => {
             if (mounted) setLoading(true);
             try {
-                // Fetch states
-                /* const stateRes = await fetch("https://nga-states-lga.onrender.com/fetch", {
-                    signal: controller.signal,
-                });
-                if (!stateRes.ok) throw new Error(`Failed to fetch states (status ${stateRes.status})`);
-                const stateData = await stateRes.json();
-                if (!Array.isArray(stateData)) throw new Error("Unexpected response shape — expected array for states");
-                const stateOpts: Option[] = stateData.map((state: string) => ({ label: state, value: state }));
-                if (mounted) setStates(stateOpts); */
-
                 // Fetch parents
                 const parentRes = await fetch("/api/parents", {
                     signal: controller.signal,
@@ -173,52 +156,6 @@ const NewStudent: React.FC = () => {
             controller.abort();
         };
     }, []);
-
-    // Fetch LGAs based on selected state
-    /*  useEffect(() => {
-         const controller = new AbortController();
-         let mounted = true;
- 
-         const fetchLgas = async () => {
-             if (!selectedState) {
-                 if (mounted) setLgas([]);
-                 return;
-             }
-             if (mounted) setLoading(true);
-             try {
-                 const res = await fetch(`https://nga-states-lga.onrender.com/?state=${encodeURIComponent(selectedState)}`, {
-                     signal: controller.signal,
-                 });
-                 if (!res.ok) throw new Error(`Failed to fetch LGAs (status ${res.status})`);
-                 const data = await res.json();
- 
-                 if (!Array.isArray(data)) throw new Error("Unexpected response shape — expected array for LGAs");
- 
-                 const opts: Option[] = data.map((lga: string) => ({ label: lga, value: lga }));
- 
-                 if (mounted) setLgas(opts);
-             } catch (err: any) {
-                 if (err?.name === "AbortError") return;
-                 console.error("Unexpected fetch error:", err);
-                 toast?.current?.show({
-                     severity: "error",
-                     summary: "Error",
-                     detail: "Could not load LGAs for the selected state.",
-                     life: 3000,
-                 });
-                 if (mounted) setLgas([]);
-             } finally {
-                 if (mounted) setLoading(false);
-             }
-         };
- 
-         fetchLgas();
- 
-         return () => {
-             mounted = false;
-             controller.abort();
-         };
-     }, [selectedState]); */
 
     // A helper function to handle toast display
     const show = (
@@ -443,66 +380,6 @@ const NewStudent: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* <div className="p-field grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="email">Email</label>
-                            <InputText
-                                id="email"
-                                type="email"
-                                {...register("email")}
-                                className={errors.email ? "p-invalid w-full" : "w-full"}
-                            />
-                            {errors.email && <small className="p-error">{errors.email.message}</small>}
-                        </div>
-                        <div>
-                            <label htmlFor="phone">Phone</label>
-                            <InputText
-                                id="phone"
-                                {...register("phone")}
-                                className={errors.phone ? "p-invalid w-full" : "w-full"}
-                            />
-                            {errors.phone && <small className="p-error">{errors.phone.message}</small>}
-                        </div>
-                    </div> */}
-
-                    {/* <div className="p-field grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="state">State</label>
-                            <Controller
-                                name="state"
-                                control={control}
-                                render={({ field }) => (
-                                    <Dropdown
-                                        id="state"
-                                        {...field}
-                                        options={states}
-                                        placeholder="Select State"
-                                        className={errors.state ? "p-invalid w-full" : "w-full"}
-                                    />
-                                )}
-                            />
-                            {errors.state && <small className="p-error">{errors.state.message}</small>}
-                        </div>
-                        <div>
-                            <label htmlFor="lga">LGA</label>
-                            <Controller
-                                name="lga"
-                                control={control}
-                                render={({ field }) => (
-                                    <Dropdown
-                                        id="lga"
-                                        {...field}
-                                        options={lgas}
-                                        placeholder={selectedState ? (lgas.length ? "Select LGA" : "No LGAs available") : "Select a state first"}
-                                        className={errors.lga ? "p-invalid w-full" : "w-full"}
-                                        disabled={!selectedState || !lgas.length}
-                                    />
-                                )}
-                            />
-                            {errors.lga && <small className="p-error">{errors.lga.message}</small>}
-                        </div>
-                    </div> */}
-
                     <div className="p-field">
                         <label htmlFor="address">Address</label>
                         <InputTextarea
@@ -521,10 +398,16 @@ const NewStudent: React.FC = () => {
                                 name="parentid"
                                 control={control}
                                 render={({ field }) => (
+                                    // Added filter props to enable a search box within the Dropdown
                                     <Dropdown
                                         id="parentid"
-                                        {...field}
+                                        value={field.value}
                                         options={parents}
+                                        onChange={(e) => field.onChange(e.value)}
+                                        filter
+                                        filterBy="label"
+                                        filterPlaceholder="Search parent..."
+                                        showClear
                                         placeholder="Select Parent"
                                         className={errors.parentid ? "p-invalid w-full" : "w-full"}
                                     />
@@ -551,7 +434,7 @@ const NewStudent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
+                    <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-rowjustify-end gap-2 mt-3">
                         <Button
                             label="Cancel"
                             type="button"
