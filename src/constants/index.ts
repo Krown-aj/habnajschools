@@ -22,6 +22,15 @@ import nursery from "@/assets/nursery.jpg";
 import jss from "@/assets/jss.jpg";
 import jss2 from "@/assets/jss2.jpg";
 import habnaj from "@/assets/habnaj.jpg";
+import headboy from "@/assets/headboy.jpg";
+import footballer from "@/assets/footballer.jpg";
+import engineer from "@/assets/engineer.jpg";
+import doctors from "@/assets/doctors.jpg";
+import teachers from "@/assets/teachers.jpg";
+import careerday from "@/assets/careerday.jpg";
+import lawyers from "@/assets/lawyers.jpg";
+import military from "@/assets/military.jpg";
+import pilots from "@/assets/pilots.jpg";
 
 // Type definitions for menu
 export interface SubLink {
@@ -196,6 +205,15 @@ export const images = {
     jss,
     jss2,
     habnaj,
+    headboy,
+    footballer,
+    engineer,
+    doctors,
+    teachers,
+    careerday,
+    lawyers,
+    military,
+    pilots,
 }
 
 export const CONTACT = {

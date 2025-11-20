@@ -25,6 +25,15 @@ const CONTACT_PHONE = CONTACT.phone;
 const CONTACT_EMAIL = CONTACT.email;
 
 const GALLERY_IMAGES: ImageItem[] = [
+    { id: 100, src: (images as any).teachers, alt: "Teachers", title: "Teachers of Tommorrow", description: "An exciteful faces of young students aspiring to be teachers", category: "Event" },
+    { id: 9, src: (images as any).careerday, alt: "Career Day", title: "Career Guidance and Counselling Day", description: "Students exploring various career options during our Career Guidance and Counselling Day.", category: "Events" },
+    { id: 10, src: (images as any).lawyers, alt: "Lawyers", title: "Lawyers of Tommorrow", description: "Students that aspire to be lawyers learned about the legal profession.", category: "Events" },
+    { id: 11, src: (images as any).military, alt: "Military Day", title: "Military Career", description: "Students with military aspiration explore career options in the armed forces.", category: "Events" },
+    { id: 12, src: (images as any).pilots, alt: "Pilots Visit", title: "Aviation Career", description: "Students learning about aviation careers.", category: "Events" },
+    { id: 0, src: (images as any).headboy, alt: "Head Boy", title: "Head Boy Primary Section", description: "The head boy presentation during career guidance and counselling.", category: "Event" },
+    { id: 101, src: (images as any).engineer, alt: "Engineer", title: "Engineers of Tommorrow", description: "Students that aspire to be engineers learned about the engineering profession.", category: "Events" },
+    { id: 102, src: (images as any).doctors, alt: "Doctors", title: "Doctors of Tommorrow", description: "Students that aspire to be doctors learned about the medical profession.", category: "Events" },
+    { id: 103, src: (images as any).footballer, alt: "Footballer", title: "Footballers of Tommorrow", description: "Students that aspire to be professional footballers learned about the sports profession.", category: "Events" },
     { id: 1, src: (images as any).jss, alt: "Students in Classroom", title: "Engaging Classroom Learning", description: "Students actively participating in a mathematics lesson at Habnaj International Schools.", category: "Classroom" },
     { id: 2, src: (images as any).basketball, alt: "Playground Fun", title: "Playground Activities", description: "Children enjoying playtime on our safe and spacious playground.", category: "Facilities" },
     { id: 3, src: (images as any).jss2, alt: "Science Day Exhibition", title: "Science Day 2024", description: "Students showcasing innovative experiments during the annual Science Day.", category: "Events" },
