@@ -63,6 +63,7 @@ export const teacherSchema = z.object({
     phone: phoneSchema.optional(),
     address: z.string().min(1),
     avarta: z.string().optional(),
+    section: z.string().min(1, { message: "Section is required!" }),
     password: passwordSchema.optional(),
     active: z.boolean().default(true)
 });
@@ -96,6 +97,7 @@ export const parentUpdateSchema = parentSchema.partial();
 export const subjectSchema = z.object({
     name: z.string().min(1, { message: "Subject name is required" }),
     category: z.string().min(1, { message: "Category is required" }),
+    section: z.string().optional(),
     teacherIds: z.array(z.string().min(1, { message: "Teacher ID must be a non-empty string" })).optional(),
 });
 
@@ -107,6 +109,7 @@ export const classSchema = z.object({
     name: z.string().min(1),
     category: z.string().optional(),
     capacity: z.number().int().optional(),
+    section: z.string().min(1, { message: "Section is required!" }),
     formmasterid: z.string().min(1)
 });
 export type ClassSchema = z.infer<typeof classSchema>;

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             ];
         }
 
-        const teachers = await prisma.teacher.findMany({
+        const teachers: any[] = await prisma.teacher.findMany({
             where,
             select: {
                 id: true,
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const bodyValidation = await validateRequestBody(request, teacherSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, firstname, surname, othername, birthday, bloodgroup, gender, qualification, state, lga, email, phone, address, avarta, password, active } = bodyValidation.data!;
+        const { title, firstname, surname, othername, birthday, bloodgroup, gender, qualification, state, lga, email, phone, address, avarta, password, active, section } = bodyValidation.data!;
 
         // Check if email or phone already exists
         const existingTeacher = await prisma.teacher.findFirst({
@@ -126,6 +126,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 phone,
                 address,
                 avarta,
+                section,
                 password: hashedPassword,
                 active
             },
@@ -139,6 +140,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 gender: true,
                 qualification: true,
                 active: true,
+                section: true,
                 subjects: {
                     select: {
                         id: true,

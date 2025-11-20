@@ -14,13 +14,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
         // Restrict access based on user role
         if (userRole === UserRole.TEACHER) {
-            // Teachers see classes where they are form masters or have lessons
-            where.OR = [
+            const teacherRecord = await prisma.teacher.findUnique({
+                where: { id: session!.user.id },
+                select: { section: true }
+            });
+
+            const orConditions: Prisma.ClassWhereInput[] = [
                 { formmasterid: session!.user.id },
-                { lessons: { some: { teacherid: session!.user.id } } }
+                { lessons: { some: { teacherid: session!.user.id } } },
             ];
+            if (teacherRecord?.section) {
+                orConditions.push({ section: teacherRecord.section });
+            }
+
+            where.OR = orConditions;
         } else if (userRole === UserRole.PARENT) {
-            // Parents see classes of their children
             where.students = {
                 some: {
                     parentid: session!.user.id
@@ -35,6 +43,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 name: true,
                 category: true,
                 capacity: true,
+                section: true,
                 formmasterid: true,
                 formmaster: {
                     select: {
@@ -56,7 +65,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                     }
                 }
             },
-            orderBy: { name: 'asc', }
+            orderBy: { name: 'asc' }
         });
 
         return successResponse({ data: classes });
@@ -73,7 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const bodyValidation = await validateRequestBody(request, classSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { name, category, capacity, formmasterid } = bodyValidation.data!;
+        const { name, category, capacity, section, formmasterid } = bodyValidation.data!;
 
         // Check if class name already exists
         const existingClass = await prisma.class.findUnique({
@@ -105,6 +114,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 name,
                 category,
                 capacity,
+                section,
                 formmasterid
             },
             select: {
@@ -112,6 +122,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 name: true,
                 category: true,
                 capacity: true,
+                section: true,
                 formmasterid: true,
                 formmaster: {
                     select: {

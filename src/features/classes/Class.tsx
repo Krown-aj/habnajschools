@@ -129,6 +129,10 @@ const Class: React.FC<ClassProps> = () => {
                                                 <dt className="font-semibold">Category</dt>
                                                 <dd>{classData?.category || "–"}</dd>
                                             </div>
+                                            <div>
+                                                <dt className="font-semibold">Section</dt>
+                                                <dd>{classData?.section || "–"}</dd>
+                                            </div>
 
                                             <div>
                                                 <dt className="font-semibold">Capacity</dt>

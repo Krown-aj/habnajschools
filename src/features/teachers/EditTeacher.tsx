@@ -30,6 +30,14 @@ const titleOptions = [
     { label: "Engr.", value: "Engr." },
 ];
 
+// Define section options for dropdown
+const sectionOptions = [
+    { label: "Pre-Nursery", value: "PRE-NURSERY" },
+    { label: "Nursery", value: "NURSERY" },
+    { label: "Primary", value: "PRIMARY" },
+    { label: "Secondary", value: "SECONDARY" },
+];
+
 // Define gender options for dropdown
 const genderOptions = [
     { label: "Male", value: "MALE" },
@@ -84,6 +92,7 @@ const EditTeacher: React.FC = () => {
             title: "",
             firstname: "",
             surname: "",
+            section: "",
             othername: "",
             birthday: undefined,
             gender: undefined,
@@ -148,6 +157,7 @@ const EditTeacher: React.FC = () => {
                 setValue("title", teacherData.title || "");
                 setValue("firstname", teacherData.firstname || "");
                 setValue("surname", teacherData.surname || "");
+                setValue("section", teacherData.section || "");
                 setValue("othername", teacherData.othername || "");
                 setValue("birthday", teacherData.birthday ? new Date(teacherData.birthday) : undefined);
                 setValue("gender", teacherData.gender || undefined);
@@ -377,14 +387,34 @@ const EditTeacher: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field">
-                        <label htmlFor="surname">Surname</label>
-                        <InputText
-                            id="surname"
-                            {...register("surname")}
-                            className={errors.surname ? "p-invalid w-full" : "w-full"}
-                        />
-                        {errors.surname && <small className="p-error">{errors.surname.message}</small>}
+                    <div className="p-field grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="surname">Surname</label>
+                            <InputText
+                                id="surname"
+                                {...register("surname")}
+                                className={errors.surname ? "p-invalid w-full" : "w-full"}
+                            />
+                            {errors.surname && <small className="p-error">{errors.surname.message}</small>}
+                        </div>
+                        <div>
+                            <label htmlFor="section">Section</label>
+                            <Controller
+                                name="section"
+                                control={control}
+                                render={({ field }) => (
+                                    <Dropdown
+                                        id="section"
+                                        {...field}
+                                        options={sectionOptions}
+                                        placeholder="Select Section"
+                                        className={errors.section ? "p-invalid w-full" : "w-full"}
+                                    />
+                                )}
+                            />
+                            {errors.section && <small className="p-error">{errors.section.message}</small>}
+                        </div>
+
                     </div>
 
                     <div className="p-field grid grid-cols-2 gap-4">

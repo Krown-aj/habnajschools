@@ -233,6 +233,10 @@ const Teacher: React.FC<TeacherProps> = () => {
                                             </dd>
                                         </div>
                                         <div>
+                                            <dt className="font-semibold pb-3">Section</dt>
+                                            <dd>{teacherData?.section || "–"}</dd>
+                                        </div>
+                                        <div>
                                             <dt className="font-semibold pb-3">Qualifications</dt>
                                             <dd>{teacherData?.qualification || "–"}</dd>
                                         </div>

@@ -42,6 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 name: true,
                 category: true,
                 capacity: true,
+                section: true,
                 formmasterid: true,
                 formmaster: {
                     select: {
@@ -101,7 +102,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, classUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { name, category, capacity, formmasterid } = bodyValidation.data!;
+        const { name, category, capacity, section, formmasterid } = bodyValidation.data!;
 
         // Check for name conflicts
         if (name) {
@@ -134,6 +135,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (name) updateData.name = name;
         if (category) updateData.category = category;
         if (capacity !== undefined) updateData.capacity = capacity;
+        if (section) updateData.section = section;
         if (formmasterid !== undefined) updateData.formmasterid = formmasterid;
 
         const updatedClass = await prisma.class.update({
@@ -144,6 +146,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 name: true,
                 category: true,
                 capacity: true,
+                section: true,
                 formmasterid: true,
                 formmaster: {
                     select: {

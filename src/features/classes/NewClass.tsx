@@ -28,6 +28,14 @@ const categoryOptions = [
 
 ];
 
+// Define section options for dropdown
+const sectionOptions = [
+    { label: "Pre-Nursery", value: "PRE-NURSERY" },
+    { label: "Nursery", value: "NURSERY" },
+    { label: "Primary", value: "PRIMARY" },
+    { label: "Secondary", value: "SECONDARY" },
+];
+
 const NewClass: React.FC = () => {
     const router = useRouter();
     const toast = useRef<Toast>(null);
@@ -194,6 +202,26 @@ const NewClass: React.FC = () => {
                             )}
                         />
                         {errors.category && <small className="p-error">{errors.category.message}</small>}
+                    </div>
+
+                    {/* Section Field */}
+                    <div className="p-field">
+                        <label htmlFor="section">Section</label>
+                        <Controller
+                            name="section"
+                            control={control}
+                            defaultValue=""
+                            render={({ field }) => (
+                                <Dropdown
+                                    id="section"
+                                    {...field}
+                                    options={sectionOptions}
+                                    placeholder="Select Section"
+                                    className={errors.section ? "p-invalid w-full" : "w-full"}
+                                />
+                            )}
+                        />
+                        {errors.section && <small className="p-error">{errors.section.message}</small>}
                     </div>
 
                     {/* Capacity Field */}

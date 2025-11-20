@@ -50,6 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 phone: true,
                 gender: true,
                 active: true,
+                section: true,
                 subjects: {
                     select: {
                         id: true,
@@ -119,7 +120,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, teacherUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, firstname, surname, othername, birthday, bloodgroup, gender, state, lga, email, phone, address, avarta, password, active } = bodyValidation.data!;
+        const { title, firstname, surname, othername, birthday, bloodgroup, gender, state, lga, email, phone, address, avarta, password, active, section } = bodyValidation.data!;
 
         // Check for email or phone conflicts
         if (email || phone) {
@@ -155,6 +156,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (address) updateData.address = address;
         if (avarta !== undefined) updateData.avarta = avarta;
         if (password) updateData.password = await bcrypt.hash(password, 12);
+        if (section !== undefined) updateData.section = section;
         if (active !== undefined && userRole !== UserRole.TEACHER) updateData.active = active;
 
         const updatedTeacher = await prisma.teacher.update({
@@ -176,6 +178,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 lga: true,
                 address: true,
                 active: true,
+                section: true,
                 subjects: {
                     select: {
                         id: true,

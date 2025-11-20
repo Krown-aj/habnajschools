@@ -27,6 +27,14 @@ const categoryOptions = [
     { label: "Silver", value: "Silver" },
 ];
 
+// Define section options for dropdown
+const sectionOptions = [
+    { label: "Pre-Nursery", value: "PRE-NURSERY" },
+    { label: "Nursery", value: "NURSERY" },
+    { label: "Primary", value: "PRIMARY" },
+    { label: "Secondary", value: "SECONDARY" },
+];
+
 const EditClass: React.FC = () => {
     const router = useRouter();
     const params = useParams();
@@ -94,6 +102,7 @@ const EditClass: React.FC = () => {
                 setValue("name", classData.name);
                 setValue("category", classData.category);
                 setValue("capacity", classData.capacity);
+                setValue("section", classData.section);
                 setValue("formmasterid", classData.formmasterid);
 
                 // Handle teachers response
@@ -246,6 +255,26 @@ const EditClass: React.FC = () => {
                             )}
                         />
                         {errors.category && <p className="text-red-500 text-sm">{errors.category.message}</p>}
+                    </div>
+
+                    {/* Section Field */}
+                    <div className="p-field">
+                        <label htmlFor="section">Section</label>
+                        <Controller
+                            name="section"
+                            control={control}
+                            defaultValue=""
+                            render={({ field }) => (
+                                <Dropdown
+                                    id="section"
+                                    {...field}
+                                    options={sectionOptions}
+                                    placeholder="Select Section"
+                                    className={errors.section ? "p-invalid w-full" : "w-full"}
+                                />
+                            )}
+                        />
+                        {errors.section && <small className="p-error">{errors.section.message}</small>}
                     </div>
 
                     {/* Capacity Field */}
