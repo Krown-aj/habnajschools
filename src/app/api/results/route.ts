@@ -25,34 +25,31 @@ function ordinal(n: number): string {
  * If passMark provided and student is below it an extra gentle suggestion is appended.
  */
 function generateRemark(average: number, passMark?: number | null): string {
-    // safety: coerce to number
     const avg = Number(average ?? 0);
 
     let baseRemark = "Keep working hard.";
 
     if (avg >= 70) {
-        baseRemark = "Excellent work — well done! Keep up the outstanding effort and continue challenging yourself.";
+        baseRemark = "Excellent work — keep aiming higher.";
     } else if (avg >= 60) {
-        baseRemark = "Very good performance — you're doing really well. Keep practicing and aim for even higher achievements.";
+        baseRemark = "Very good — stay consistent and improve steadily.";
     } else if (avg >= 50) {
-        baseRemark = "Good job — solid performance. With a bit more focus and practice you can reach the next level.";
+        baseRemark = "Good effort — focus on practice to reach the next band.";
     } else if (avg >= 45) {
-        baseRemark = "Pass — you've met the basic requirements. Continue practicing consistently to strengthen your understanding.";
+        baseRemark = "Pass — maintain effort and strengthen weak areas.";
     } else if (avg >= 40) {
-        baseRemark = "Fair — you're close. Focus on the areas you find difficult, ask questions, and keep trying.";
+        baseRemark = "Fair — you're close, review difficult topics regularly.";
     } else {
-        baseRemark = "Needs improvement — don't be discouraged. With regular practice, a bit of support, and focused effort you can improve. Reach out to your teacher or parent for help and set small goals.";
+        baseRemark = "Needs improvement — seek support and practise consistently.";
     }
 
-    // If passMark exists and student is below it, append a gentle suggestion (non-shaming)
     if (typeof passMark === "number" && avg < passMark) {
-        // Be careful with tone: informative + supportive
-        const suggestion = ` Note: this is below the pass mark (${passMark}). Please work with your teacher or guardian to identify specific areas to improve — small, steady steps will help.`;
-        return baseRemark + suggestion;
+        return `${baseRemark} Note: below pass mark (${passMark}); get guidance and work on key areas.`;
     }
 
     return baseRemark;
 }
+
 
 type GenerateBody = {
     gradingId: string;
@@ -68,9 +65,9 @@ type GenerateBody = {
  *
  * Permissions:
  *  - SUPER/ADMIN/MANAGEMENT => access all
- *  - TEACHER => access only to their classes (best-effort using Class.teacherId)
- *  - STUDENT => access only own results (must match session user id)
- *  - PARENT => access to their children (best-effort using Student.parentId)
+ *  - TEACHER => access only to their classes
+ *  - STUDENT => access only own results
+ *  - PARENT => access to their children
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
@@ -85,7 +82,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ]);
         if (validation.error) return validation.error;
         const user = (validation as any).user;
-        const userRole = validation?.userRole
+        const userRole = validation?.userRole;
 
         const url = new URL(request.url);
         const gradingId = url.searchParams.get("gradingId") ?? undefined;
@@ -100,8 +97,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
         // Role-specific restrictions
         if (userRole === UserRole.TEACHER) {
-            // Best-effort: if teacher provided a classId we use it;
-            // otherwise try to find classes assigned to this teacher (assumes Class.formmasterid exists).
             if (!classId) {
                 const teacherClasses = await prisma.class.findMany({
                     where: { formmasterid: user.id },
@@ -109,32 +104,33 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 });
                 const ids = teacherClasses.map((c) => c.id);
                 if (ids.length === 0) {
-                    return NextResponse.json({ error: "No classes assigned to this teacher. Provide classId to query results." }, { status: 403 });
+                    return NextResponse.json(
+                        { error: "Unauthorized Access - You can't access this record" },
+                        { status: 403 }
+                    );
                 }
                 where.classId = { in: ids };
             }
         } else if (userRole === UserRole.STUDENT) {
-            // Students may only view their own report cards
             if (!studentId || studentId !== user.id) {
-                return NextResponse.json({ error: "Students may only view their own results. Provide your studentId." }, { status: 403 });
+                return NextResponse.json({ error: "Unauthorized Access - You can't access this record" }, { status: 403 });
             }
         } else if (userRole === UserRole.PARENT) {
-            // Best-effort: find children of this parent via student.parentid (assumption)
             if (!studentId && !classId) {
                 const children = await prisma.student.findMany({
-                    where: { parentid: user.id }, // ASSUMPTION: Student model has parentid
+                    where: { parentid: user.id },
                     select: { id: true },
                 });
                 const childIds = children.map((c) => c.id);
                 if (childIds.length === 0) {
-                    return NextResponse.json({ error: "No children found for this parent. Provide studentId or classId to query." }, { status: 403 });
+                    return NextResponse.json({ error: "Unauthorized Access - You can't access this record." }, { status: 403 });
                 }
                 where.studentId = { in: childIds };
             }
             if (studentId) {
                 const child = await prisma.student.findFirst({ where: { id: studentId, parentid: user.id } });
                 if (!child) {
-                    return NextResponse.json({ error: "You do not have permission to view that student's results." }, { status: 403 });
+                    return NextResponse.json({ error: "Unauthorized Access - You can't access this record." }, { status: 403 });
                 }
             }
         }
@@ -143,18 +139,186 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const reportCards = await prisma.reportCard.findMany({
             where,
             include: {
-                student: { select: { id: true, admissionnumber: true, firstname: true, othername: true, surname: true, avarta: true, grades: true, } },
+                student: {
+                    select: {
+                        id: true,
+                        admissionnumber: true,
+                        firstname: true,
+                        othername: true,
+                        surname: true,
+                        avarta: true,
+                    },
+                },
                 class: { select: { id: true, name: true } },
-                grading: { select: { id: true, title: true, session: true, term: true, } },
+                grading: { select: { id: true, title: true, session: true, term: true } },
             },
-            orderBy: { classPosition: "asc" },
+            orderBy: [{ classId: "asc" }, { classPosition: "asc" }],
         });
 
-        return successResponse(reportCards);
+        if (!reportCards || reportCards.length === 0) {
+            return successResponse([]);
+        }
+
+        // Collect ids to batch fetch related data
+        const gradingIds = Array.from(new Set(reportCards.map((r) => r.grading.id)));
+        const classIds = Array.from(new Set(reportCards.map((r) => r.class.id)));
+        const studentIds = Array.from(new Set(reportCards.map((r) => r.student.id)));
+
+        // Batch fetch studentGrades for these students & grading(s)
+        const studentGrades = await prisma.studentGrade.findMany({
+            where: {
+                gradingId: gradingId ?? undefined,
+                studentId: { in: studentIds },
+            },
+            select: {
+                id: true,
+                studentId: true,
+                subjectId: true,
+                score: true,
+                grade: true,
+                remark: true,
+                subjectPosition: true,
+                classId: true,
+            },
+        });
+
+        // Fetch subject names for subjects referenced in studentGrades
+        const subjectIds = Array.from(new Set(studentGrades.map((g) => g.subjectId)));
+        const subjects = subjectIds.length > 0 ? await prisma.subject.findMany({
+            where: { id: { in: subjectIds } },
+            select: { id: true, name: true },
+        }) : [];
+
+        const subjectById = new Map(subjects.map((s) => [s.id, s.name]));
+
+        // Batch fetch studentAssessments (scores for assessments per student+subject+grading)
+        const studentAssessments = await prisma.studentAssessment.findMany({
+            where: {
+                gradingId: gradingId ?? undefined,
+                studentId: { in: studentIds },
+            },
+            select: {
+                id: true,
+                studentId: true,
+                subjectId: true,
+                score: true,
+                assessment: { select: { id: true, name: true } },
+            },
+        });
+
+        // Batch fetch studentTraits
+        const studentTraits = await prisma.studentTrait.findMany({
+            where: {
+                gradingId: gradingId ?? undefined,
+                studentId: { in: studentIds },
+            },
+            select: {
+                id: true,
+                studentId: true,
+                score: true,
+                remark: true,
+                trait: { select: { id: true, name: true, category: true } },
+            },
+        });
+
+        // Now assemble payload grouped by class
+        // For each class found in reportCards produce one object { session, term, class, gradings: [...] }
+        const classesMap = new Map<string, { id: string; name: string }>();
+        reportCards.forEach((rc) => {
+            classesMap.set(rc.class.id, { id: rc.class.id, name: rc.class.name });
+        });
+
+        const payload: Array<any> = [];
+
+        for (const [clsId, clsMeta] of classesMap.entries()) {
+            // pick reportCards for this class
+            const cardsForClass = reportCards.filter((rc) => rc.class.id === clsId);
+
+            // all cards in this class should share the same grading info
+            const gradingGroups = new Map<string, { session: string | null; term: string | null; gradings: any[] }>();
+
+            for (const rc of cardsForClass) {
+                const gId = rc.grading.id;
+                if (!gradingGroups.has(gId)) {
+                    gradingGroups.set(gId, {
+                        session: rc.grading.session ?? null,
+                        term: rc.grading.term ?? null,
+                        gradings: [],
+                    });
+                }
+
+                // find grades (subjects) for this student + grading
+                const gradesForStudent = studentGrades.filter((sg) => sg.studentId === rc.student.id && sg.classId === rc.class.id);
+                // Map each studentGrade to subject object including assessments
+                const subjectsForStudent = gradesForStudent.map((sg) => {
+                    const subjectName = subjectById.get(sg.subjectId) ?? null;
+                    // assessments for this student & subject
+                    const assessmentsForThisSubject = studentAssessments
+                        .filter((sa) => sa.studentId === rc.student.id && sa.subjectId === sg.subjectId)
+                        .map((sa) => ({
+                            name: sa.assessment?.name ?? null,
+                            score: sa.score,
+                        }));
+
+                    return {
+                        name: subjectName,
+                        score: sg.score,
+                        grade: sg.grade,
+                        remark: sg.remark,
+                        subjectPosition: sg.subjectPosition ?? null,
+                        assessments: assessmentsForThisSubject,
+                    };
+                });
+
+                // traits for this student & grading
+                const traitsForStudent = studentTraits
+                    .filter((st) => st.studentId === rc.student.id)
+                    .map((st) => ({
+                        name: st.trait?.name ?? null,
+                        score: st.score,
+                        category: st.trait?.category ?? null,
+                        remark: st.remark ?? null,
+                    }));
+
+                // Build the student-level grades object
+                const gradesObj = {
+                    subjects: subjectsForStudent,
+                    traits: traitsForStudent,
+                    totalScore: rc.totalScore ?? 0,
+                    averageScore: rc.averageScore ?? 0,
+                    classPosition: rc.classPosition ?? null,
+                    formmasterRemark: rc.formmasterRemark ?? null,
+                    remark: rc.remark ?? null,
+                };
+
+                // push student (grading) entry
+                gradingGroups.get(gId)!.gradings.push({
+                    admissionnumber: rc.student.admissionnumber,
+                    firstname: rc.student.firstname,
+                    surname: rc.student.surname,
+                    othername: rc.student.othername,
+                    avarta: rc.student.avarta,
+                    grades: gradesObj,
+                });
+            }
+
+            // For each grading group create top-level object for this class
+            for (const [gId, group] of gradingGroups.entries()) {
+                payload.push({
+                    session: group.session,
+                    term: group.term,
+                    class: { id: clsMeta.id, name: clsMeta.name },
+                    gradings: group.gradings,
+                });
+            }
+        }
+
+        return successResponse(payload);
     } catch (error) {
         return handleError(error, "Failed to fetch report cards");
     }
 }
+
 
 /**
  * POST /api/results

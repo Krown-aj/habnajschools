@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+"use client";
+
+import React, { useState, useRef, useCallback, useMemo } from "react";
 import { FaPlus } from "react-icons/fa";
-import { Trash2, Edit, Eye, Book, Award } from "lucide-react";
+import { Trash2, Edit, Eye, Award } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "primereact/datatable";
@@ -14,6 +16,7 @@ import { FilterMatchMode } from "primereact/api";
 import { Toast } from "primereact/toast";
 
 import Spinner from "@/components/Spinner/Spinner";
+import { useGetGradingPolicies, useDeleteGradingPolicies, useInvalidateGradingPolicies } from "@/hooks/useGradingPolicies";
 
 type GradingPoliciesProps = {
     title?: string;
@@ -28,12 +31,18 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
 }) => {
     const router = useRouter();
     const { data: session } = useSession();
-    const [policies, setPolicies] = useState<any[]>([]);
+
+    // React Query hooks
+    const { data: policiesData, isLoading: isPending, isFetching } = useGetGradingPolicies();
+    const deleteMutation = useDeleteGradingPolicies();
+    const invalidate = useInvalidateGradingPolicies();
+
+    const policies = policiesData ?? [];
+
     const [selected, setSelected] = useState<any[]>([]);
     const [current, setCurrent] = useState<any | null>(null);
     const [deletingIds, setDeletingIds] = useState<string[]>([]);
     const [updatingIds, setUpdatingIds] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
     const toast = useRef<Toast>(null);
     const panel = useRef<OverlayPanel>(null);
 
@@ -41,52 +50,26 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
         global: { value: null, matchMode: FilterMatchMode.CONTAINS } as DataTableFilterMetaData,
     });
 
-    const role = session?.user?.role || 'Guest';
-    const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin' || role.toLowerCase() === 'management';
+    const role = session?.user?.role || "Guest";
+    const permit =
+        role.toLowerCase() === "super" ||
+        role.toLowerCase() === "admin" ||
+        role.toLowerCase() === "management";
 
-    // Fetch grading policies data on mount
-    useEffect(() => {
-        fetchData();
-    }, []);
+    // Toast helper
+    const show = useCallback(
+        (
+            type: "success" | "error" | "info" | "warn" | "secondary" | "contrast" | undefined,
+            title: string,
+            message: string
+        ) => {
+            toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
+        },
+        []
+    );
 
-    // Toast helper function
-    const show = useCallback((
-        type: "success" | "error" | "info" | "warn" | "secondary" | "contrast" | undefined,
-        title: string,
-        message: string
-    ) => {
-        toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
-    }, []);
-
-    // Fetch grading policies data
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch("/api/policies");
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            // endpoint returns { data: policies }
-            setPolicies(data?.data || []);
-        } catch (err) {
-            show("error", "Fetch Error", "Failed to fetch grading policies, please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // A helper function to make API call to delete records
-    const deleteApi = async (ids: string[]) => {
-        const query = ids.map(id => `ids=${encodeURIComponent(id)}`).join("&");
-        const res = await fetch(`/api/policies?${query}`, { method: "DELETE" });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `Status ${res.status}`);
-        }
-        return res;
-    };
-
-    // A helper function to confirm user's action
-    const confirmDelete = useCallback(
+    // Confirm & delete using React Query mutation
+    const handleConfirmDelete = useCallback(
         (ids: string[]) => {
             confirmDialog({
                 message:
@@ -100,52 +83,56 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
                 accept: async () => {
                     setDeletingIds(ids);
                     try {
-                        await deleteApi(ids);
+                        // use the mutation (it should perform optimistic update via your hook)
+                        await deleteMutation.mutateAsync(ids);
                         show(
                             "success",
                             "Deleted",
-                            ids.length === 1
-                                ? "Record deleted successfully."
-                                : `${ids.length} records deleted successfully.`
+                            ids.length === 1 ? "Record deleted successfully." : `${ids.length} records deleted successfully.`
                         );
-                        setPolicies(prev => prev.filter(p => !ids.includes(p.id)));
+                        // clear selection if any of the selected were deleted
                         setSelected(prev => prev.filter(p => !ids.includes(p.id)));
+                        // Invalidate to be safe (your hook also invalidates onSettled)
+                        invalidate();
                     } catch (err: any) {
-                        show("error", "Deletion Error", err.message || "Failed to delete record, please try again.");
+                        show("error", "Deletion Error", err?.message || "Failed to delete record, please try again.");
                     } finally {
                         setDeletingIds([]);
                     }
                 },
             });
         },
-        [show]
+        [deleteMutation, invalidate, show]
     );
 
-    // A helper function to delete single record
     const deleteOne = useCallback(
         (id: string) => {
-            confirmDelete([id]);
+            handleConfirmDelete([id]);
             panel.current?.hide();
         },
-        [confirmDelete]
+        [handleConfirmDelete]
     );
 
-    // A helper function to handle navigation to new page
+    // Navigation helpers
     const handleNew = useCallback(() => {
         router.push(`/dashboard/${role}/settings/grading-policies/new`);
-    }, [role]);
+    }, [role, router]);
 
-    // A helper function to handle navigation to view page
-    const handleView = useCallback((currentPolicy: any) => {
-        router.push(`/dashboard/${role}/settings/grading-policies/${currentPolicy?.id}/view`);
-    }, [role]);
+    const handleView = useCallback(
+        (currentPolicy: any) => {
+            router.push(`/dashboard/${role}/settings/grading-policies/${currentPolicy?.id}/view`);
+        },
+        [role, router]
+    );
 
-    // A helper function to handle navigation to edit page
-    const handleEdit = useCallback((currentPolicy: any) => {
-        router.push(`/dashboard/${role}/settings/grading-policies/${currentPolicy?.id}/edit`);
-    }, [role]);
+    const handleEdit = useCallback(
+        (currentPolicy: any) => {
+            router.push(`/dashboard/${role}/settings/grading-policies/${currentPolicy?.id}/edit`);
+        },
+        [role, router]
+    );
 
-    // A helper function to display action body
+    // Actions & overlays
     const actionBody = useCallback(
         (row: any) => (
             <Button
@@ -160,28 +147,28 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
         []
     );
 
-    // A helper function to display context menu
-    const getOverlayActions = useCallback((currentPolicy: any) => {
-        return [
+    const getOverlayActions = useCallback(
+        (currentPolicy: any) => [
             {
                 label: "View",
                 icon: <Eye className="w-4 h-4 mr-2" />,
-                action: () => currentPolicy && handleView(currentPolicy)
+                action: () => currentPolicy && handleView(currentPolicy),
             },
             {
                 label: "Edit",
                 icon: <Edit className="w-4 h-4 mr-2" />,
-                action: () => currentPolicy && handleEdit(currentPolicy)
+                action: () => currentPolicy && handleEdit(currentPolicy),
             },
             {
                 label: "Delete",
                 icon: <Trash2 className="w-4 h-4 mr-2" />,
-                action: () => currentPolicy && deleteOne(currentPolicy.id)
+                action: () => currentPolicy && deleteOne(currentPolicy.id),
             },
-        ];
-    }, [role, deleteOne, handleEdit, handleView]);
+        ],
+        [deleteOne, handleEdit, handleView]
+    );
 
-    // Render helpers for assessments and traits
+    // Render helpers for traits/assessments
     const traitsBody = useCallback((rowData: any) => {
         const names: string[] = (rowData.traits || []).map((t: any) => t.name);
         const count = names.length;
@@ -192,12 +179,14 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
         return (
             <div title={names.join(", ")}>
                 <div className="text-sm font-medium">{count}</div>
-                <div className="text-xs text-gray-500 truncate max-w-xs">{preview}{more}</div>
+                <div className="text-xs text-gray-500 truncate max-w-xs">
+                    {preview}
+                    {more}
+                </div>
             </div>
         );
     }, []);
 
-    // Render helpers for assessments and assessments
     const assessmentsBody = useCallback((rowData: any) => {
         const names: string[] = (rowData.assessments || []).map((a: any) => a.name);
         const count = names.length;
@@ -208,13 +197,22 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
         return (
             <div title={names.join(", ")}>
                 <div className="text-sm font-medium">{count}</div>
-                <div className="text-xs text-gray-500 truncate max-w-xs">{preview}{more}</div>
+                <div className="text-xs text-gray-500 truncate max-w-xs">
+                    {preview}
+                    {more}
+                </div>
             </div>
         );
     }, []);
 
-    // Loading effect
-    if (loading) {
+    // Combined loading state
+    const loading = isFetching || deleteMutation.isPending;
+
+    // memoized selected IDs for bulk delete
+    const selectedIds = useMemo(() => selected.map(p => p.id), [selected]);
+
+    // Loading effect (same UI you had before)
+    if (loading && !policies.length) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
@@ -269,7 +267,7 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
                 </div>
 
                 {/* DataTable */}
-                <div className="">
+                <div>
                     <DataTable
                         value={policies}
                         paginator
@@ -283,7 +281,7 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
                         dataKey="id"
                         selection={selected}
                         onSelectionChange={e => setSelected(e.value)}
-                        loading={loading}
+                        loading={isFetching}
                         emptyMessage="No grading policies found."
                         selectionMode="multiple"
                     >
@@ -291,47 +289,42 @@ const GradingPolicies: React.FC<GradingPoliciesProps> = ({
                         <Column field="title" header="Title" sortable />
                         <Column field="passMark" header="Pass Mark" sortable />
                         <Column field="maxScore" header="Max Score" sortable />
-                        <Column
-                            header="Assessments"
-                            body={assessmentsBody}
-                        />
-                        <Column
-                            header="Traits"
-                            body={traitsBody}
-                            sortable={false}
-                        />
+                        <Column header="Assessments" body={assessmentsBody} />
+                        <Column header="Traits" body={traitsBody} sortable={false} />
                         {permit && (
                             <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                         )}
                     </DataTable>
                 </div>
             </div>
+
             {selected.length > 0 && (
                 <div className="mt-4">
                     <Button
                         label={`Delete ${selected.length} grading policy(ies)`}
                         icon="pi pi-trash"
                         className="p-button-danger"
-                        onClick={() => confirmDelete(selected.map(p => p.id))}
-                        loading={deletingIds.length > 0}
-                        disabled={deletingIds.length > 0 || updatingIds.length > 0}
+                        onClick={() => handleConfirmDelete(selectedIds)}
+                        loading={deleteMutation.isPending}
+                        disabled={deleteMutation.isPending || updatingIds.length > 0}
                     />
                 </div>
             )}
 
             <OverlayPanel ref={panel} className="shadow-lg rounded-md">
                 <div className="flex flex-col w-48 bg-white rounded-md">
-                    {current && getOverlayActions(current).map(({ label, icon, action }) => (
-                        <Button
-                            key={label}
-                            className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
-                            onClick={action}
-                            disabled={current && updatingIds.includes(current.id)}
-                        >
-                            {icon}
-                            <span className="ml-2">{label}</span>
-                        </Button>
-                    ))}
+                    {current &&
+                        getOverlayActions(current).map(({ label, icon, action }) => (
+                            <Button
+                                key={label}
+                                className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
+                                onClick={action}
+                                disabled={current && updatingIds.includes(current.id)}
+                            >
+                                {icon}
+                                <span className="ml-2">{label}</span>
+                            </Button>
+                        ))}
                 </div>
             </OverlayPanel>
         </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,8 +11,9 @@ import { Toast } from "primereact/toast";
 import { InputNumber } from "primereact/inputnumber";
 import { Dropdown } from "primereact/dropdown";
 
-import { gradingPolicySchema, GradingPolicySchema } from "@/lib/schemas/index";
+import { gradingPolicySchema, type GradingPolicySchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
+import { useCreateGradingPolicy, useInvalidateGradingPolicies } from "@/hooks/useGradingPolicies";
 
 const TRAIT_CATEGORIES = [
     { label: "Behavioural", value: "BEHAVIOURAL" },
@@ -24,7 +25,10 @@ const TRAIT_CATEGORIES = [
 const NewGradingPolicy: React.FC = () => {
     const router = useRouter();
     const toast = useRef<Toast>(null);
-    const [saving, setSaving] = useState(false);
+
+    // React Query mutation
+    const createMutation = useCreateGradingPolicy();
+    const invalidate = useInvalidateGradingPolicies();
 
     const {
         register,
@@ -64,11 +68,7 @@ const NewGradingPolicy: React.FC = () => {
     });
 
     // A helper function to handle toast display
-    const show = (
-        severity: "success" | "error",
-        summary: string,
-        detail: string
-    ) => {
+    const show = (severity: "success" | "error", summary: string, detail: string) => {
         toast.current?.show({ severity, summary, detail, life: 3000 });
     };
 
@@ -77,40 +77,28 @@ const NewGradingPolicy: React.FC = () => {
         router.back();
     };
 
-    // A function to submit data to API for saving
+    // Submit handler
     const onSubmit = async (data: GradingPolicySchema) => {
-        setSaving(true);
         try {
-            const res = await fetch("/api/policies", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
-            });
-            const result = await res.json();
-            if (res.ok) {
-                show("success", "Grading Policy Created", "New grading policy has been created successfully.");
-                setTimeout(() => {
-                    reset();
-                    router.back();
-                }, 1500);
-            } else {
-                show(
-                    "error",
-                    "Creation Error",
-                    result.error || result.message || "Failed to create new grading policy, please try again."
-                );
-            }
+            await createMutation.mutateAsync(data);
+            show("success", "Grading Policy Created", "New grading policy has been created successfully.");
+            reset();
+            invalidate();
+            router.back();
         } catch (err: any) {
-            show("error", "Creation Error", err.message || "Could not create new grading policy.");
-        } finally {
-            setSaving(false);
+            const message =
+                (err && (err.message || (err as any).response?.data?.message)) ||
+                "Failed to create new grading policy, please try again.";
+            show("error", "Creation Error", message);
         }
     };
+
+    const saving = createMutation.isPending;
 
     return (
         <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
-            {saving && <Spinner visible onHide={() => setSaving(false)} />}
+            {saving && <Spinner visible onHide={() => { }} />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900/80 p-4">Create New Grading Policy</h2>
                 <Button
@@ -124,11 +112,7 @@ const NewGradingPolicy: React.FC = () => {
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
                     <div className="p-field">
                         <label htmlFor="title">Title</label>
-                        <InputText
-                            id="title"
-                            {...register("title")}
-                            className={errors.title ? "p-invalid w-full" : "w-full"}
-                        />
+                        <InputText id="title" {...register("title")} className={errors.title ? "p-invalid w-full" : "w-full"} />
                         {errors.title && <small className="p-error">{errors.title.message}</small>}
                     </div>
 
@@ -211,7 +195,9 @@ const NewGradingPolicy: React.FC = () => {
                                                     onValueChange={(e) => field.onChange(e.value)}
                                                     onBlur={field.onBlur}
                                                     min={0}
-                                                    className={errors.assessments?.[index]?.weight ? "p-invalid w-full" : "w-full"}
+                                                    className={
+                                                        errors.assessments?.[index]?.weight ? "p-invalid w-full" : "w-full"
+                                                    }
                                                 />
                                             )}
                                         />
@@ -231,7 +217,9 @@ const NewGradingPolicy: React.FC = () => {
                                                     onValueChange={(e) => field.onChange(e.value)}
                                                     onBlur={field.onBlur}
                                                     min={1}
-                                                    className={errors.assessments?.[index]?.maxScore ? "p-invalid w-full" : "w-full"}
+                                                    className={
+                                                        errors.assessments?.[index]?.maxScore ? "p-invalid w-full" : "w-full"
+                                                    }
                                                 />
                                             )}
                                         />
@@ -257,7 +245,7 @@ const NewGradingPolicy: React.FC = () => {
                         />
                     </div>
 
-                    {/* Traits (category is now a Dropdown) */}
+                    {/* Traits (category is a Dropdown) */}
                     <div className="p-field">
                         <label className="font-bold">Traits</label>
                         {traitFields.map((field, index) => (
@@ -311,7 +299,7 @@ const NewGradingPolicy: React.FC = () => {
                             label="Add Trait"
                             type="button"
                             className="p-button-secondary p-button-sm"
-                            onClick={() => appendTrait({ name: "", category: 'AFFECTIVE' })}
+                            onClick={() => appendTrait({ name: "", category: "AFFECTIVE" })}
                         />
                     </div>
 

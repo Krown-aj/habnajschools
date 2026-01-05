@@ -5,17 +5,14 @@ import { studentSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, UserRole } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
 
-/**
- * Generate a new admission number for a student.
- */
 const generateAdmissionNumber = (
   existingAdmissions: string[] = [],
   currentDate = new Date(),
-  prefix = "HAB"
+  prefix = 'HAB'
 ) => {
   const yearStr = currentDate.getFullYear().toString();
-  const safePrefix = prefix || "";
-  const escapedPrefix = safePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const safePrefix = prefix || '';
+  const escapedPrefix = safePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const regex = new RegExp(`^${escapedPrefix}/${yearStr}/(\\d{5})$`);
   const sequences = existingAdmissions.reduce((acc: number[], admission: string) => {
     const match = admission.match(regex);
@@ -24,31 +21,51 @@ const generateAdmissionNumber = (
   }, []);
   const baseSequence = 1;
   const nextSequence = sequences.length === 0 ? baseSequence : Math.max(...sequences) + 1;
-  const paddedSequence = nextSequence.toString().padStart(5, "0");
+  const paddedSequence = nextSequence.toString().padStart(5, '0');
   return `${safePrefix}/${yearStr}/${paddedSequence}`;
 };
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.PARENT]);
+    // Route protected
+    const validation = await validateSession();
     if (validation.error) return validation.error;
 
-    const { userRole, session } = validation;
-    const where: Prisma.StudentWhereInput = {};
+    const url = new URL(request.url);
+    const classParam = url.searchParams.get('classid');
+    const sectionParam = url.searchParams.get('section');
+    const parentParam = url.searchParams.get('parentid');
+    const teacherParam = url.searchParams.get('teacherid');
 
-    // Restrict access based on user role
-    if (userRole === UserRole.TEACHER) {
-      // Teachers see students in classes where they are form masters or have lessons
-      where.class = {
-        OR: [
-          { formmasterid: session!.user.id },
-          { lessons: { some: { teacherid: session!.user.id } } }
-        ]
-      };
-    } else if (userRole === UserRole.PARENT) {
-      // Parents see only their own children
-      where.parentid = session!.user.id;
+    const whereClauses: Prisma.StudentWhereInput[] = [];
+
+    // classid filter
+    if (classParam) whereClauses.push({ classid: classParam });
+
+    // parentid filter
+    if (parentParam) whereClauses.push({ parentid: parentParam });
+
+    // If teacherid provided, apply teacher-specific logic:
+    if (teacherParam) {
+      if (sectionParam) {
+        // Teacher requested a specific section -> include ALL students in that section
+        whereClauses.push({ section: sectionParam });
+      } else {
+        // No section: return students who belong to classes where the teacher is
+        // either the formmaster OR has lessons.
+        whereClauses.push({
+          OR: [
+            { class: { formmasterid: teacherParam } },
+            { class: { lessons: { some: { teacherid: teacherParam } } } },
+          ],
+        });
+      }
+    } else {
+      // No teacher param: if section provided, apply it as a filter
+      if (sectionParam) whereClauses.push({ section: sectionParam });
     }
+
+    const where: Prisma.StudentWhereInput = whereClauses.length > 0 ? { AND: whereClauses } : {};
 
     const students = await prisma.student.findMany({
       where,
@@ -77,14 +94,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             firstname: true,
             surname: true,
             othername: true,
-          }
+          },
         },
         class: {
           select: {
             id: true,
             name: true,
             category: true,
-          }
+          },
         },
         createdAt: true,
         updatedAt: true,
@@ -94,11 +111,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             assignments: true,
             submissions: true,
             reportCards: true,
-            payments: true
-          }
-        }
+            payments: true,
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
 
     return successResponse({ data: students });
@@ -115,9 +132,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const bodyValidation = await validateRequestBody(request, studentSchema);
     if (bodyValidation.error) return bodyValidation.error;
 
-    const { firstname, surname, othername, birthday, gender, religion, house, bloodgroup, admissiondate, /* email, phone, */ address, section, state, lga, avarta, password, active, parentid, classid } = bodyValidation.data!;
+    const {
+      firstname,
+      surname,
+      othername,
+      birthday,
+      gender,
+      religion,
+      house,
+      bloodgroup,
+      admissiondate,
+      address,
+      section,
+      state,
+      lga,
+      avarta,
+      password,
+      active,
+      parentid,
+      classid,
+    } = bodyValidation.data!;
 
-    // Validate parentid and classid
     const parent = await prisma.parent.findUnique({ where: { id: parentid } });
     if (!parent) {
       return NextResponse.json({ error: 'Invalid parent ID' }, { status: 400 });
@@ -125,41 +160,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const classData = await prisma.class.findUnique({
       where: { id: classid },
-      select: { id: true, capacity: true, _count: { select: { students: true } } }
+      select: { id: true, capacity: true, _count: { select: { students: true } } },
     });
     if (!classData) {
       return NextResponse.json({ error: 'Invalid class ID' }, { status: 400 });
     }
 
-    // Check class capacity
-    /*  if (classData.capacity && classData._count.students >= classData.capacity) {
-       return NextResponse.json({ error: 'Class capacity exceeded' }, { status: 400 });
-     } */
+    const existingAdmissions = await prisma.student.findMany({ select: { admissionnumber: true } });
+    const admissionNumbers: string[] = existingAdmissions.map((s) => s.admissionnumber).filter((n): n is string => !!n);
+    const admissionnumber = generateAdmissionNumber(admissionNumbers, new Date(), 'HAB');
 
-    // Generate admission number
-    const existingAdmissions = await prisma.student.findMany({
-      select: { admissionnumber: true }
-    });
-    const admissionNumbers: string[] = existingAdmissions
-      .map((s) => s.admissionnumber)
-      .filter((n): n is string => !!n);
-    const admissionnumber = generateAdmissionNumber(admissionNumbers, new Date(), "HAB");
-
-    // Check if email or phone already exists
     const existingStudent = await prisma.student.findFirst({
-      where: {
-        OR: [
-          { admissionnumber },
-        ]
-      }
+      where: { OR: [{ admissionnumber }] },
     });
 
     if (existingStudent) {
       return NextResponse.json(
         {
-          error:
-            existingStudent.admissionnumber === admissionnumber ? 'Admission number already exists' :
-              'Phone already exists'
+          error: existingStudent.admissionnumber === admissionnumber ? 'Admission number already exists' : 'Phone already exists',
         },
         { status: 409 }
       );
@@ -180,8 +198,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         bloodgroup,
         admissiondate,
         section,
-        /*    email,
-           phone, */
         address,
         state,
         lga,
@@ -189,7 +205,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         password: hashedPassword,
         active,
         parentid,
-        classid
+        classid,
       },
       select: {
         id: true,
@@ -213,20 +229,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           select: {
             id: true,
             name: true,
-            category: true
-          }
+            category: true,
+          },
         },
         parent: {
           select: {
             id: true,
             firstname: true,
             surname: true,
-            othername: true
-          }
+            othername: true,
+          },
         },
         createdAt: true,
-        updatedAt: true
-      }
+        updatedAt: true,
+      },
     });
 
     return successResponse(newStudent, 201);
@@ -248,12 +264,12 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     }
 
     const result = await prisma.student.deleteMany({
-      where: { id: { in: ids } }
+      where: { id: { in: ids } },
     });
 
     return successResponse({
       deleted: result.count,
-      message: `Successfully deleted ${result.count} students`
+      message: `Successfully deleted ${result.count} students`,
     });
   } catch (error) {
     return handleError(error, 'Failed to delete students');

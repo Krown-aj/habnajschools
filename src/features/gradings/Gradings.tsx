@@ -17,6 +17,7 @@ import { Toast } from "primereact/toast";
 import { Tag } from "primereact/tag";
 
 import Spinner from "@/components/Spinner/Spinner";
+import { useGetGradings, useDeleteGradings, useUpdateGrading, useInvalidateGradings } from "@/hooks/useGradings";
 
 type GradingsProps = {
     title?: string;
@@ -31,111 +32,97 @@ const Gradings: React.FC<GradingsProps> = ({
 }) => {
     const router = useRouter();
     const { data: session } = useSession();
-    const [gradings, setGradings] = useState<any[]>([]);
-    const [selected, setSelected] = useState<any[]>([]);
-    const [current, setCurrent] = useState<any | null>(null);
-    const [deletingIds, setDeletingIds] = useState<string[]>([]);
-    const [updatingIds, setUpdatingIds] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
     const toast = useRef<Toast>(null);
     const panel = useRef<OverlayPanel>(null);
 
+    // Filters
     const [filters, setFilters] = useState<DataTableFilterMeta>({
         global: { value: null, matchMode: FilterMatchMode.CONTAINS } as DataTableFilterMetaData,
     });
 
-    const role = (session?.user?.role || 'Guest').toString();
-    const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin' || role.toLowerCase() === 'management';
-    const teacher = role.toLowerCase() === 'teacher';
+    // Selection & UI state
+    const [selected, setSelected] = useState<any[]>([]);
+    const [current, setCurrent] = useState<any | null>(null);
+    const [deletingIds, setDeletingIds] = useState<string[]>([]);
+    const [updatingIds, setUpdatingIds] = useState<string[]>([]);
 
-    // Fetch gradings data on mount
-    useEffect(() => {
-        fetchData();
-    }, []);
+    // Permissions
+    const role = (session?.user?.role || "Guest").toString();
+    const permit = ["super", "admin", "management"].includes(role.toLowerCase());
+    const teacher = role.toLowerCase() === "teacher";
 
-    // Toast helper function
-    const show = useCallback((
-        type: "success" | "error" | "info" | "warn" | "secondary" | "contrast" | undefined,
-        title: string,
-        message: string
-    ) => {
-        toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
-    }, []);
+    // Query hooks
+    const { data: gradings = [], isLoading: listLoading, isFetching } = useGetGradings();
+    const deleteMutation = useDeleteGradings();
+    const updateMutation = useUpdateGrading();
+    const invalidateGradings = useInvalidateGradings();
 
-    // Fetch gradings data
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch("/api/gradings");
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            setGradings(data?.data || []);
-        } catch (err) {
-            show("error", "Fetch Error", "Failed to fetch grading records, please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Toast helper
+    const show = useCallback(
+        (
+            type: "success" | "error" | "info" | "warn" | "secondary" | "contrast" | undefined,
+            title: string,
+            message: string
+        ) => {
+            toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
+        },
+        []
+    );
 
-    // A helper function to make API call to delete records
-    const deleteApi = async (ids: string[]) => {
-        const query = ids.map(id => `ids=${encodeURIComponent(id)}`).join("&");
-        const res = await fetch(`/api/gradings?${query}`, { method: "DELETE" });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `Status ${res.status}`);
-        }
-        return res;
-    };
+    // Combined loading
+    const loading = listLoading;
 
-    // Updated: helper to update publish status.
-    const updatePublishStatus = async (id: string, newPublished: boolean) => {
-        setUpdatingIds(prev => [...prev, id]);
-        try {
-            if (newPublished) {
-                show("info", "Generating Results", "Generating report cards before publishing. This may take a while...");
-                const genRes = await fetch("/api/results", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ gradingId: id }),
-                });
+    // Delete API wrapper using the mutation (handles single or multiple ids)
+    const deleteApi = useCallback(
+        async (ids: string[]) => {
+            // Use mutation.mutateAsync for awaiting and error handling
+            await deleteMutation.mutateAsync(ids);
+            // the hook will invalidate queries onSettled
+        },
+        [deleteMutation]
+    );
 
-                if (!genRes.ok) {
-                    const errBody = await genRes.json().catch(() => ({}));
-                    throw new Error(errBody?.error || `Failed to generate results (status ${genRes.status})`);
+    // Update publish status helper (keeps the "generate results before publish" behavior)
+    const updatePublishStatus = useCallback(
+        async (id: string, newPublished: boolean) => {
+            setUpdatingIds(prev => [...prev, id]);
+            try {
+                if (newPublished) {
+                    show("info", "Generating Results", "Generating report cards before publishing. This may take a while...");
+                    const genRes = await fetch("/api/results", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ gradingId: id }),
+                    });
+
+                    if (!genRes.ok) {
+                        const errBody = await genRes.json().catch(() => ({}));
+                        throw new Error(errBody?.error || `Failed to generate results (status ${genRes.status})`);
+                    }
+
+                    show("success", "Results Generated", "Report cards were generated successfully.");
                 }
 
-                show("success", "Results Generated", "Report cards were generated successfully.");
+                // Use update mutation (expects { id, data })
+                await updateMutation.mutateAsync({ id, data: { published: newPublished } });
+
+                show("success", "Status Updated", `Grading ${newPublished ? "published" : "unpublished"} successfully.`);
+                // invalidate or rely on optimistic update by hook; still explicitly invalidate to be safe
+                invalidateGradings();
+            } catch (err: any) {
+                show("error", "Update Error", err?.message || "Failed to update grading status, please try again.");
+            } finally {
+                setUpdatingIds(prev => prev.filter(updatingId => updatingId !== id));
             }
+        },
+        [updateMutation, show, invalidateGradings]
+    );
 
-            const res = await fetch(`/api/gradings/${id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ published: newPublished }),
-            });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || `Status ${res.status}`);
-            }
-
-            setGradings(prev => prev.map(g => (g.id === id ? { ...g, published: newPublished } : g)));
-            show("success", "Status Updated", `Grading ${newPublished ? "published" : "unpublished"} successfully.`);
-        } catch (err: any) {
-            show("error", "Update Error", err?.message || "Failed to update grading status, please try again.");
-        } finally {
-            setUpdatingIds(prev => prev.filter(updatingId => updatingId !== id));
-        }
-    };
-
-    // A helper function to confirm user's action
+    // Confirm delete wrapper
     const confirmDelete = useCallback(
         (ids: string[]) => {
             confirmDialog({
-                message:
-                    ids.length === 1
-                        ? "Do you really want to delete this record?"
-                        : `Do you really want to delete these ${ids.length} records?`,
+                message: ids.length === 1 ? "Do you really want to delete this record?" : `Do you really want to delete these ${ids.length} records?`,
                 header: "Confirm Deletion",
                 icon: "pi pi-exclamation-triangle",
                 acceptClassName: "p-button-danger",
@@ -144,14 +131,8 @@ const Gradings: React.FC<GradingsProps> = ({
                     setDeletingIds(ids);
                     try {
                         await deleteApi(ids);
-                        show(
-                            "success",
-                            "Deleted",
-                            ids.length === 1
-                                ? "Record deleted successfully."
-                                : `${ids.length} records deleted successfully.`
-                        );
-                        setGradings(prev => prev.filter(g => !ids.includes(g.id)));
+                        show("success", "Deleted", ids.length === 1 ? "Record deleted successfully." : `${ids.length} records deleted successfully.`);
+                        // clear selection of deleted ids
                         setSelected(prev => prev.filter(g => !ids.includes(g.id)));
                     } catch (err: any) {
                         show("error", "Deletion Error", err.message || "Failed to delete record, please try again.");
@@ -161,10 +142,10 @@ const Gradings: React.FC<GradingsProps> = ({
                 },
             });
         },
-        [show]
+        [deleteApi, show]
     );
 
-    // A helper function to delete single record
+    // Single delete helper
     const deleteOne = useCallback(
         (id: string) => {
             confirmDelete([id]);
@@ -173,7 +154,7 @@ const Gradings: React.FC<GradingsProps> = ({
         [confirmDelete]
     );
 
-    // A helper function to handle publish/unpublish (shows confirmation first)
+    // Publish toggle confirm
     const handlePublishToggle = useCallback(
         (id: string, published: boolean) => {
             confirmDialog({
@@ -194,25 +175,25 @@ const Gradings: React.FC<GradingsProps> = ({
     // Navigation helpers
     const handleNew = useCallback(() => {
         router.push(`/dashboard/${role}/gradings/new`);
-    }, [role]);
+    }, [role, router]);
 
     const handleView = useCallback((currentGrading: any) => {
         router.push(`/dashboard/${role}/gradings/${currentGrading?.id}/view`);
-    }, [role]);
+    }, [role, router]);
 
     const handleEdit = useCallback((currentGrading: any) => {
         router.push(`/dashboard/${role}/gradings/${currentGrading?.id}/edit`);
-    }, [role]);
+    }, [role, router]);
 
     const handleGrade = useCallback((currentGrading: any) => {
         router.push(`/dashboard/${role}/gradings/${currentGrading?.id}/grade`);
-    }, [role]);
+    }, [role, router]);
 
     const handleMarkTraits = useCallback((currentGrading: any) => {
         router.push(`/dashboard/${role}/gradings/${currentGrading?.id}/traits`);
-    }, [role]);
+    }, [role, router]);
 
-    // A helper function to display action body
+    // Action button in table
     const actionBody = useCallback(
         (row: any) => {
             // If user is a teacher and the grading is published, don't show actions
@@ -303,7 +284,7 @@ const Gradings: React.FC<GradingsProps> = ({
         return actions;
     }, [teacher, handleView, handleEdit, handlePublishToggle, deleteOne, handleGrade, handleMarkTraits]);
 
-    // A helper function to display status body
+    // Status tag for rows
     const statusBody = useCallback(
         (row: any) => (
             <Tag
@@ -315,7 +296,7 @@ const Gradings: React.FC<GradingsProps> = ({
         []
     );
 
-    // Loading effect
+    // Loading state UI
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -329,7 +310,7 @@ const Gradings: React.FC<GradingsProps> = ({
     return (
         <section className="flex flex-col w-full py-3 px-4">
             <Toast ref={toast} />
-            {(deletingIds.length > 0 || updatingIds.length > 0) && (
+            {(deletingIds.length > 0 || updatingIds.length > 0 || isFetching) && (
                 <Spinner visible onHide={() => { setDeletingIds([]); setUpdatingIds([]); }} />
             )}
             <div className="bg-white rounded-md shadow-md space-y-4">
@@ -394,13 +375,13 @@ const Gradings: React.FC<GradingsProps> = ({
                         <Column field="session" header="Session" sortable />
                         <Column field="term" header="Term" sortable />
                         <Column field="published" header="Status" body={statusBody} sortable />
-                        {/* Actions column: visible to admins OR teachers, but teacher cells are empty when grading is published */}
                         {(permit || teacher) && (
                             <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                         )}
                     </DataTable>
                 </div>
             </div>
+
             {selected.length > 0 && permit && (
                 <div className="mt-4">
                     <Button
@@ -421,7 +402,7 @@ const Gradings: React.FC<GradingsProps> = ({
                             key={label}
                             className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
                             onClick={action}
-                            disabled={current && updatingIds.includes(current.id)}
+                            disabled={current && (updatingIds.includes(current.id) || deletingIds.includes(current.id))}
                         >
                             {icon}
                             <span className="ml-2">{label}</span>

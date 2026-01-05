@@ -54,6 +54,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     }
                 },
                 category: true,
+                section: true,
                 createdAt: true,
                 updatedAt: true,
                 _count: {
@@ -93,7 +94,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, subjectUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { name, category, teacherIds } = bodyValidation.data!;
+        const { name, category, section, teacherIds } = bodyValidation.data!;
 
         // Check for name conflicts
         if (name) {
@@ -125,6 +126,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const updateData: any = {};
         if (name) updateData.name = name;
         if (category) updateData.category = category;
+        if (section) updateData.section = section;
         if (teacherIds !== undefined) {
             updateData.teachers = {
                 set: teacherIds.map(id => ({ id }))
@@ -148,6 +150,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     }
                 },
                 category: true,
+                section: true,
                 createdAt: true,
                 updatedAt: true
             }

@@ -9,9 +9,12 @@ import { Dropdown } from "primereact/dropdown";
 import { Button } from "primereact/button";
 import { Toast } from "primereact/toast";
 import { Checkbox } from "primereact/checkbox";
-
 import { gradingSchema, GradingSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
+
+import { useGetTerms } from "@/hooks/useTerms";
+import { useGetGradingPolicies } from "@/hooks/useGradingPolicies";
+import { useCreateGrading, useInvalidateGradings } from "@/hooks/useGradings";
 
 // Define option interface
 interface Option {
@@ -30,9 +33,34 @@ const NewGrading: React.FC = () => {
     const router = useRouter();
     const toast = useRef<Toast>(null);
     const [saving, setSaving] = useState(false);
-    const [loading, setLoading] = useState(false);
+
+    // React Query hooks
+    const { data: terms = [], isLoading: termsLoading, isError: termsError } = useGetTerms();
+    const { data: policies = [], isLoading: policiesLoading, isError: policiesError } = useGetGradingPolicies();
+    const createMutation = useCreateGrading();
+    const invalidateGradings = useInvalidateGradings();
+
+    // derive session options from terms
     const [sessions, setSessions] = useState<Option[]>([]);
+    useEffect(() => {
+        const sessionSet = new Set<string>();
+        if (Array.isArray(terms)) {
+            terms.forEach((t: any) => {
+                if (t?.session) sessionSet.add(t.session);
+            });
+        }
+        setSessions(Array.from(sessionSet).map(s => ({ label: s, value: s })));
+    }, [terms]);
+
+    // derive grading policy options
     const [gradingPolicies, setGradingPolicies] = useState<Option[]>([]);
+    useEffect(() => {
+        if (Array.isArray(policies)) {
+            setGradingPolicies(policies.map((p: any) => ({ label: p.title, value: p.id })));
+        } else {
+            setGradingPolicies([]);
+        }
+    }, [policies]);
 
     const {
         register,
@@ -52,106 +80,47 @@ const NewGrading: React.FC = () => {
         },
     });
 
-    // Fetch sessions (from terms) and grading policies on component mount
-    useEffect(() => {
-        const controller = new AbortController();
-        let mounted = true;
+    // combined loading
+    const loading = termsLoading || policiesLoading;
 
-        const fetchData = async () => {
-            if (mounted) setLoading(true);
-            try {
-                // Fetch terms to derive sessions
-                const termRes = await fetch("/api/terms", {
-                    signal: controller.signal,
-                });
-                if (!termRes.ok) throw new Error(`Failed to fetch terms (status ${termRes.status})`);
-                const termData = await termRes.json();
-                if (!Array.isArray(termData.data)) throw new Error("Unexpected response shape — expected array for terms");
-                const sessionSet = new Set<string>(termData.data.map((term: any) => term.session));
-                const sessionOpts: Option[] = Array.from(sessionSet).map((session: string) => ({
-                    label: session,
-                    value: session,
-                }));
-                if (mounted) setSessions(sessionOpts);
-
-                // Fetch grading policies
-                const policyRes = await fetch("/api/policies", {
-                    signal: controller.signal,
-                });
-                if (!policyRes.ok) throw new Error(`Failed to fetch grading policies (status ${policyRes.status})`);
-                const policyData = await policyRes.json();
-                if (!Array.isArray(policyData.data)) throw new Error("Unexpected response shape — expected array for grading policies");
-                const policyOpts: Option[] = policyData.data.map((policy: any) => ({
-                    label: policy.title,
-                    value: policy.id,
-                }));
-                if (mounted) setGradingPolicies(policyOpts);
-            } catch (err: any) {
-                if (err?.name === "AbortError") return;
-                console.error("Unexpected fetch error:", err);
-                toast?.current?.show({
-                    severity: "error",
-                    summary: "Error",
-                    detail: "Could not load required data (sessions or grading policies).",
-                    life: 3000,
-                });
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        fetchData();
-
-        return () => {
-            mounted = false;
-            controller.abort();
-        };
-    }, []);
-
-    // A helper function to handle toast display
-    const show = (
-        severity: "success" | "error",
-        summary: string,
-        detail: string
-    ) => {
+    // show helper
+    const show = (severity: "success" | "error", summary: string, detail: string) => {
         toast.current?.show({ severity, summary, detail, life: 3000 });
     };
 
-    // A helper function to handle back navigation
     const handleBack = () => {
         router.back();
     };
 
-    // A function to submit data to API for saving
     const onSubmit = async (data: GradingSchema) => {
         setSaving(true);
         try {
-            const payload = {
-                ...data,
-            };
-            const res = await fetch("/api/gradings", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-            const result = await res.json();
-            if (res.ok) {
-                show("success", "Grading Created", "New grading session has been created successfully.");
-                setTimeout(() => {
-                    reset();
-                    router.back();
-                }, 1500);
-            } else {
-                show("error", "Creation Error", result.error || result.message || "Failed to create new grading session, please try again.");
-            }
+            const created = await createMutation.mutateAsync(data);
+            show("success", "Grading Created", "New grading session has been created successfully.");
+            invalidateGradings();
+            reset();
+            router.back();
         } catch (err: any) {
-            show("error", "Creation Error", err.message || "Could not create new grading session.");
+            const msg = err?.message || (err?.response?.data?.error) || "Failed to create new grading session, please try again.";
+            show("error", "Creation Error", msg);
         } finally {
             setSaving(false);
         }
     };
 
-    // Loading effect during fetching
+    // show toast if initial fetch errors
+    useEffect(() => {
+        if (termsError) {
+            show("error", "Load Error", "Failed to load sessions (terms).");
+        }
+    }, [termsError]);
+
+    useEffect(() => {
+        if (policiesError) {
+            show("error", "Load Error", "Failed to load grading policies.");
+        }
+    }, [policiesError]);
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -179,11 +148,7 @@ const NewGrading: React.FC = () => {
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
                     <div className="p-field">
                         <label htmlFor="title">Title</label>
-                        <InputText
-                            id="title"
-                            {...register("title")}
-                            className={errors.title ? "p-invalid w-full" : "w-full"}
-                        />
+                        <InputText id="title" {...register("title")} className={errors.title ? "p-invalid w-full" : "w-full"} />
                         {errors.title && <small className="p-error">{errors.title.message}</small>}
                     </div>
 
@@ -263,19 +228,8 @@ const NewGrading: React.FC = () => {
 
                     {/* Action Buttons */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
-                        <Button
-                            label="Cancel"
-                            type="button"
-                            outlined
-                            onClick={handleBack}
-                        />
-                        <Button
-                            label="Save"
-                            type="submit"
-                            className="p-button-primary"
-                            loading={saving}
-                            disabled={saving}
-                        />
+                        <Button label="Cancel" type="button" outlined onClick={handleBack} />
+                        <Button label="Save" type="submit" className="p-button-primary" loading={saving} disabled={saving} />
                     </div>
                 </form>
             </div>

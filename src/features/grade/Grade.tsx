@@ -159,6 +159,8 @@ const Grade: React.FC = () => {
 
         if (!mounted) return;
 
+        console.log("Initial fetch results:", { classesResponse, });
+
         setGrading(gradingResponse);
         setClasses(classesResponse);
         setSubjects(subjectsResponse);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,13 +13,14 @@ import { Toast } from "primereact/toast";
 import { subjectSchema, SubjectSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
 
-// Define option interface
+import { useGetTeachers } from "@/hooks/useTeachers";
+import { useCreateSubject } from "@/hooks/useSubjects";
+
 interface Option {
     label: string;
     value: string;
 }
 
-// Define subject categories for dropdown
 const categoryOptions = [
     { label: "Arts", value: "Arts" },
     { label: "General", value: "General" },
@@ -27,122 +28,84 @@ const categoryOptions = [
     { label: "Social-Sciences", value: "Social-Sciences" },
 ];
 
+const sectionOptions = [
+    { label: "Pre-Nursery", value: "PRE-NURSERY" },
+    { label: "Nursery", value: "NURSERY" },
+    { label: "Primary", value: "PRIMARY" },
+    { label: "Secondary", value: "SECONDARY" },
+];
+
 const NewSubject: React.FC = () => {
     const router = useRouter();
-    const toast = useRef<Toast>(null);
-    const [saving, setSaving] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [teachers, setTeachers] = useState<Option[]>([]);
+    const toast = useRef<Toast | null>(null);
 
+    // Form
     const {
         register,
         control,
         handleSubmit,
         reset,
         formState: { errors },
-    } = useForm({
+    } = useForm<SubjectSchema>({
         resolver: zodResolver(subjectSchema),
         mode: "onBlur",
     });
 
-    useEffect(() => {
-        const controller = new AbortController();
-        const signal = controller.signal;
+    // Teachers query 
+    const {
+        data: teachers = [],
+        isPending: isPendingTeachers,
+        isError: isTeachersError,
+        error: teachersError,
+    } = useGetTeachers();
 
-        (async () => {
-            setLoading(true);
-            try {
-                const res = await fetch('/api/teachers', { signal });
-                if (!res.ok) {
-                    toast.current?.show({
-                        severity: 'error',
-                        summary: 'Fetching Error',
-                        detail: 'Failed to load teachers.',
-                        life: 3000,
-                    });
-                    return;
-                }
+    // Create subject mutation 
+    const createSubjectMutation = useCreateSubject();
 
-                const payload = await res.json();
-                if (!payload || !Array.isArray(payload.data)) {
-                    toast.current?.show({
-                        severity: 'error',
-                        summary: 'Parsing Error',
-                        detail: 'Teachers response format invalid.',
-                        life: 3000,
-                    });
-                    return;
-                }
+    // Memoize teacher options for dropdown / multiselect
+    const teacherOptions = useMemo<Option[]>(
+        () =>
+            (teachers ?? []).map((t: any) => ({
+                label:
+                    [t.title, t.firstname, t.othername, t.surname].filter(Boolean).join(" ").trim() || "Unknown",
+                value: t.id,
+            })),
+        [teachers]
+    );
 
-                const formattedTeachers: Option[] = payload.data.map((t: any) => ({
-                    label: [t.title, t.firstname, t.othername, t.surname].filter(Boolean).join(' ') || 'Unknown',
-                    value: t.id,
-                }));
-
-                setTeachers(formattedTeachers);
-            } catch (err: any) {
-                if (err?.name === 'AbortError') return;
-                console.error('Unexpected fetch error:', err);
-                toast.current?.show({
-                    severity: 'error',
-                    summary: 'Error',
-                    detail: 'An unexpected error occurred.',
-                    life: 3000,
-                });
-            } finally {
-                setLoading(false);
-            }
-        })();
-
-        return () => controller.abort();
-    }, []);
-
-    // A helper function to handle toast display
-    const show = (
-        severity: "success" | "error",
-        summary: string,
-        detail: string
-    ) => {
+    // Helper to show toast
+    const show = (severity: "success" | "error", summary: string, detail: string) =>
         toast.current?.show({ severity, summary, detail, life: 3000 });
-    };
 
-    // A helper function to handle back navigation
-    const handleBack = () => {
-        router.back();
-    };
+    // If teacher query errored, show toast once (non-blocking)
+    if (isTeachersError) {
+        show("error", "Teachers Load Error", (teachersError as any)?.message || "Failed to load teachers.");
+    }
 
-    // A function to submit data to API for saving
-    const onSubmit = async (data: SubjectSchema) => {
-        setSaving(true);
-        try {
-            const res = await fetch("/api/subjects", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
-            });
-            const result = await res.json();
-            if (res.ok) {
+    // Submit handler uses the mutation hook
+    const onSubmit = (data: SubjectSchema) => {
+        createSubjectMutation.mutate(data, {
+            onSuccess: () => {
                 show("success", "Subject Created", "New subject has been created successfully.");
                 setTimeout(() => {
                     reset();
                     router.back();
-                }, 1500);
-            } else {
-                show("error", "Creation Error", result.error || result.message || "Failed to create new subject record, please try again.");
-            }
-        } catch (err: any) {
-            show("error", "Creation Error", err.message || "Could not create new subject record.");
-        } finally {
-            setSaving(false);
-        }
+                }, 1200);
+            },
+            onError: (err: any) => {
+                show("error", "Creation Error", err?.message || "Failed to create new subject record, please try again.");
+            },
+        });
     };
 
-    // Loading effect during fetching
-    if (loading) {
+    const handleBack = () => router.back();
+
+    // Show loading screen while teachers are loading (so the MultiSelect has options)
+    if (isPendingTeachers) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4" />
                 </div>
             </div>
         );
@@ -151,7 +114,8 @@ const NewSubject: React.FC = () => {
     return (
         <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
-            {saving && <Spinner visible onHide={() => setSaving(false)} />}
+            {createSubjectMutation.isPending && <Spinner visible onHide={() => { }} />}
+
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900/80 p-4">Create New Subject</h2>
                 <Button
@@ -161,21 +125,17 @@ const NewSubject: React.FC = () => {
                     onClick={handleBack}
                 />
             </div>
+
             <div className="space-y-4 p-4">
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
-                    {/* Name field */}
+                    {/* Name */}
                     <div className="p-field">
                         <label htmlFor="name">Name</label>
-                        <InputText
-                            id="name"
-                            placeholder="Enter subject name"
-                            {...register("name")}
-                            className={errors.name ? "p-invalid w-full" : "w-full"}
-                        />
+                        <InputText id="name" placeholder="Enter subject name" {...register("name")} className={errors.name ? "p-invalid w-full" : "w-full"} />
                         {errors.name && <small className="p-error">{errors.name.message}</small>}
                     </div>
 
-                    {/* Category Field */}
+                    {/* Category */}
                     <div className="p-field">
                         <label htmlFor="category">Subject Category</label>
                         <Controller
@@ -183,19 +143,27 @@ const NewSubject: React.FC = () => {
                             control={control}
                             defaultValue=""
                             render={({ field }) => (
-                                <Dropdown
-                                    id="category"
-                                    {...field}
-                                    options={categoryOptions}
-                                    placeholder="Select Subject Category"
-                                    className={errors.category ? "p-invalid w-full" : "w-full"}
-                                />
+                                <Dropdown id="category" {...field} options={categoryOptions} placeholder="Select Subject Category" className={errors.category ? "p-invalid w-full" : "w-full"} />
                             )}
                         />
                         {errors.category && <small className="p-error">{errors.category.message}</small>}
                     </div>
 
-                    {/* Teachers Field */}
+                    {/* Section */}
+                    <div className="p-field">
+                        <label htmlFor="section">Section</label>
+                        <Controller
+                            name="section"
+                            control={control}
+                            defaultValue=""
+                            render={({ field }) => (
+                                <Dropdown id="section" {...field} options={sectionOptions} placeholder="Select Section" className={errors.section ? "p-invalid w-full" : "w-full"} />
+                            )}
+                        />
+                        {errors.section && <small className="p-error">{errors.section.message}</small>}
+                    </div>
+
+                    {/* Teachers (filterable MultiSelect) */}
                     <div className="p-field">
                         <label htmlFor="teacherIds">Teachers</label>
                         <Controller
@@ -206,31 +174,25 @@ const NewSubject: React.FC = () => {
                                 <MultiSelect
                                     id="teacherIds"
                                     {...field}
-                                    options={teachers}
+                                    options={teacherOptions}
                                     placeholder="Select Teachers"
                                     className={errors.teacherIds ? "p-invalid w-full" : "w-full"}
                                     display="chip"
+                                    filter
+                                    filterPlaceholder="Search teachers..."
+                                    optionLabel="label"
+                                    optionValue="value"
+                                    maxSelectedLabels={3}
                                 />
                             )}
                         />
                         {errors.teacherIds && <small className="p-error">{errors.teacherIds.message}</small>}
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* Actions */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
-                        <Button
-                            label="Cancel"
-                            type="button"
-                            outlined
-                            onClick={handleBack}
-                        />
-                        <Button
-                            label="Save"
-                            type="submit"
-                            className="p-button-primary"
-                            loading={saving}
-                            disabled={saving}
-                        />
+                        <Button label="Cancel" type="button" outlined onClick={handleBack} />
+                        <Button label="Save" type="submit" className="p-button-primary" loading={createSubjectMutation.isPending} disabled={createSubjectMutation.isPending} />
                     </div>
                 </form>
             </div>

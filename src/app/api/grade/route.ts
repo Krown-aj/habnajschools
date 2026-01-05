@@ -102,7 +102,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         where,
         include: {
           assessments: { select: { id: true, name: true, weight: true, maxScore: true } },
-          student: { select: { id: true, admissionnumber: true, firstname: true, surname: true, othername: true } },
+          student: { select: { id: true, admissionnumber: true, firstname: true, surname: true, othername: true, parent: true, } },
         },
         orderBy: { score: "desc" },
       }),

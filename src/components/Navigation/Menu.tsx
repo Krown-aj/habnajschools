@@ -121,13 +121,13 @@ const menuItems = [
                  href: (role: string) => `/dashboard/${role}/assignments`,
                  visible: ['admin', 'super', 'teacher', 'student', 'parent']
              }, */
+            {
+                icon: BarChart3,
+                label: 'Report Cards',
+                href: (role: string) => `/dashboard/${role}/results`,
+                visible: ['admin', 'super', 'teacher', 'student', 'parent']
+            },
             /*  {
-                 icon: BarChart3,
-                 label: 'Results',
-                 href: (role: string) => `/dashboard/${role}/results`,
-                 visible: ['admin', 'super', 'teacher', 'student', 'parent']
-             },
-             {
                  icon: UserCheck,
                  label: 'Attendance',
                  href: (role: string) => `/dashboard/${role}/attendance`,

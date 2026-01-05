@@ -9,6 +9,8 @@ import { Button } from "primereact/button";
 import { TabView, TabPanel } from "primereact/tabview";
 import moment from "moment";
 
+import { useGetGradingById } from "@/hooks/useGradings";
+
 type GradingProps = {
     title?: string;
     subtitle?: string;
@@ -19,10 +21,10 @@ type GradingProps = {
 const Grading: React.FC<GradingProps> = () => {
     const router = useRouter();
     const params = useParams();
-    const [gradingData, setGradingData] = useState<any>(null);
     const toast = useRef<Toast>(null);
-    const [loading, setLoading] = useState(false);
-    const gradingId = params.id;
+
+    // gradingId from route params
+    const gradingId = (params as any)?.id as string | undefined;
 
     // Tab control
     const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -31,50 +33,33 @@ const Grading: React.FC<GradingProps> = () => {
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [pageSize, setPageSize] = useState<number>(10);
 
-    // Fetch grading data when component mounts
-    useEffect(() => {
-        const fetchGradingData = async () => {
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/gradings/${gradingId}`, {
-                    method: "GET",
-                    headers: { "Content-Type": "application/json" },
-                });
-                const result = await res.json();
-                if (res.ok) {
-                    setGradingData(result.data || result);
-                    setCurrentPage(1); // reset pagination on new data
-                } else {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Fetch Error",
-                        detail: result.error || "Could not fetch grading data.",
-                    });
-                }
-            } catch (err: any) {
-                toast.current?.show({
-                    severity: "error",
-                    summary: "Fetch Error",
-                    detail: err.message || "Failed to fetch grading data.",
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
+    // Use React Query hook to fetch grading detail
+    const {
+        data: gradingData,
+        isLoading,
+        isError,
+        error,
+        refetch,
+    } = useGetGradingById(gradingId, { enabled: Boolean(gradingId) });
 
-        if (gradingId) {
-            fetchGradingData();
-        }
-    }, [gradingId]);
-
-    // reset page when pageSize changes
+    // Reset pagination when grading changes or when pageSize changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [pageSize]);
+    }, [gradingId, pageSize]);
+
+    useEffect(() => {
+        if (isError) {
+            toast.current?.show({
+                severity: "error",
+                summary: "Fetch Error",
+                detail: (error as any)?.message || "Could not fetch grading data.",
+            });
+        }
+    }, [isError, error]);
 
     const handleBack = () => router.back();
 
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
@@ -88,7 +73,7 @@ const Grading: React.FC<GradingProps> = () => {
     const grades: any[] = gradingData?.studentGrades ?? [];
     const total = grades.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const startIndex = (currentPage - 1) * pageSize;
+    const startIndex = total === 0 ? 0 : (currentPage - 1) * pageSize;
     const endIndex = Math.min(startIndex + pageSize, total);
     const visibleGrades = grades.slice(startIndex, endIndex);
 
@@ -238,7 +223,7 @@ const Grading: React.FC<GradingProps> = () => {
                                         {/* Pagination controls */}
                                         <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
                                             <div className="text-xs text-gray-600">
-                                                Showing <span className="font-medium">{startIndex + 1}</span> – <span className="font-medium">{endIndex}</span> of <span className="font-medium">{total}</span>
+                                                Showing <span className="font-medium">{total === 0 ? 0 : startIndex + 1}</span> – <span className="font-medium">{endIndex}</span> of <span className="font-medium">{total}</span>
                                             </div>
 
                                             <div className="flex items-center gap-2">

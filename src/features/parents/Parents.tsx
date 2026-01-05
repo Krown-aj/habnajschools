@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { FaPlus } from "react-icons/fa";
 import { Trash2, Edit, Eye, Users } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -16,6 +16,7 @@ import { FilterMatchMode } from "primereact/api";
 import { Toast } from "primereact/toast";
 
 import Spinner from "@/components/Spinner/Spinner";
+import { useGetParents, useDeleteParents, useInvalidateParents } from "@/hooks/useParents";
 
 type ParentsProps = {
     title?: string;
@@ -30,70 +31,110 @@ const Parents: React.FC<ParentsProps> = ({
 }) => {
     const router = useRouter();
     const { data: session } = useSession();
-    const [parents, setParents] = useState<any[]>([]);
+    const toast = useRef<Toast | null>(null);
+    const panel = useRef<any>(null);
+
     const [selected, setSelected] = useState<any[]>([]);
     const [current, setCurrent] = useState<any | null>(null);
     const [deletingIds, setDeletingIds] = useState<string[]>([]);
     const [updatingIds, setUpdatingIds] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
-    const toast = useRef<Toast>(null);
-    const panel = useRef<OverlayPanel>(null);
-
     const [filters, setFilters] = useState<DataTableFilterMeta>({
         global: { value: null, matchMode: FilterMatchMode.CONTAINS } as DataTableFilterMetaData,
     });
 
-    const role = session?.user?.role || 'Guest';
-    const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin' || role.toLowerCase() === 'management';
+    const role = session?.user?.role || "Guest";
+    const permit =
+        role.toLowerCase() === "super" ||
+        role.toLowerCase() === "admin" ||
+        role.toLowerCase() === "management";
 
-    // Fetch parents data on mount
-    useEffect(() => {
-        fetchData();
-    }, []);
+    // react-query hooks
+    const { data: parentsData, isPending: isFetchingParents, isFetching } = useGetParents();
+    const deleteMutation = useDeleteParents();
+    const invalidateParents = useInvalidateParents();
 
-    // Toast helper function
-    const show = useCallback((
-        type: "success" | "error" | "info" | "warn" | "secondary" | "contrast" | undefined,
-        title: string,
-        message: string
-    ) => {
-        toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
-    }, []);
+    // Derived mapped parents for UI (fullname, phoneNumber, etc.)
+    const parents = useMemo(() => {
+        const arr = Array.isArray(parentsData) ? parentsData : [];
+        return arr.map((p: any) => ({
+            ...p,
+            fullname: `${p.title || ""} ${p.firstname || ""} ${p.othername || ""} ${p.surname || ""}`.replace(
+                /\s+/g,
+                " "
+            ).trim(),
+            phoneNumber: p.phone || "–",
+        }));
+    }, [parentsData]);
 
-    // Fetch parents data and compute fullname for searching
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch("/api/parents");
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
+    // Toast helper
+    const show = useCallback(
+        (type: "success" | "error" | "info" | "warn" | "secondary" | "contrast" | undefined, summary: string, detail: string) => {
+            toast.current?.show({ severity: type, summary, detail, life: 3000 });
+        },
+        []
+    );
 
-            const mapped = (data?.data || []).map((p: any) => ({
-                ...p,
-                fullname: `${p.title || ''} ${p.firstname || ''} ${p.othername || ''} ${p.surname || ''}`.replace(/\s+/g, ' ').trim(),
-                phoneNumber: p.phone || '–'
-            }));
+    // navigation helpers
+    const handleNew = useCallback(() => {
+        router.push(`/dashboard/${role}/parents/new`);
+    }, [router, role]);
 
-            setParents(mapped);
-        } catch (err) {
-            show("error", "Fetch Error", "Failed to fetch parents record, please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
+    const handleView = useCallback(
+        (currentParent: any) => {
+            router.push(`/dashboard/${role}/parents/${currentParent?.id}/view`);
+        },
+        [router, role]
+    );
 
-    // A helper function to make API call to delete records
-    const deleteApi = async (ids: string[]) => {
-        const query = ids.map(id => `ids=${encodeURIComponent(id)}`).join("&");
-        const res = await fetch(`/api/parents?${query}`, { method: "DELETE" });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `Status ${res.status}`);
-        }
-        return res;
-    };
+    const handleEdit = useCallback(
+        (currentParent: any) => {
+            router.push(`/dashboard/${role}/parents/${currentParent?.id}/edit`);
+        },
+        [router, role]
+    );
 
-    // A helper function to confirm user's action
+    // Actions for overlay
+    const actionBody = useCallback(
+        (row: any) => (
+            <Button
+                icon="pi pi-ellipsis-v"
+                className="p-button-text hover:bg-transparent hover:border-none hover:shadow-none"
+                onClick={(e) => {
+                    setCurrent(row);
+                    panel.current?.toggle(e);
+                }}
+            />
+        ),
+        []
+    );
+
+    const getOverlayActions = useCallback(
+        (currentParent: any) => [
+            {
+                label: "View",
+                icon: <Eye className="w-4 h-4 mr-2" />,
+                action: () => currentParent && handleView(currentParent),
+            },
+            {
+                label: "Edit",
+                icon: <Edit className="w-4 h-4 mr-2" />,
+                action: () => currentParent && handleEdit(currentParent),
+            },
+            /* {
+                label: "Delete",
+                icon: <Trash2 className="w-4 h-4 mr-2" />,
+                action: () => currentParent && confirmDelete([currentParent.id]),
+            }, */
+            {
+                label: "Delete",
+                icon: <Trash2 className="w-4 h-4 mr-2" />,
+                action: () => currentParent && deleteOne(currentParent.id)
+            },
+        ],
+        [handleEdit, handleView]
+    );
+
+    // Delete flow using deleteMutation (React Query)
     const confirmDelete = useCallback(
         (ids: string[]) => {
             confirmDialog({
@@ -105,31 +146,34 @@ const Parents: React.FC<ParentsProps> = ({
                 icon: "pi pi-exclamation-triangle",
                 acceptClassName: "p-button-danger",
                 rejectClassName: "p-button-text",
-                accept: async () => {
+                accept: () => {
                     setDeletingIds(ids);
-                    try {
-                        await deleteApi(ids);
-                        show(
-                            "success",
-                            "Deleted",
-                            ids.length === 1
-                                ? "Parent record deleted successfully."
-                                : `${ids.length} parent records deleted successfully.`
-                        );
-                        setParents(prev => prev.filter(s => !ids.includes(s.id)));
-                        setSelected(prev => prev.filter(s => !ids.includes(s.id)));
-                    } catch (err: any) {
-                        show("error", "Deletion Error", err.message || "Failed to delete parent record(s), please try again.");
-                    } finally {
-                        setDeletingIds([]);
-                    }
+                    deleteMutation.mutate(ids, {
+                        onSuccess: (res) => {
+                            show(
+                                "success",
+                                "Deleted",
+                                ids.length === 1 ? "Parent record deleted successfully." : `${ids.length} parent records deleted successfully.`
+                            );
+                            // update UI selections
+                            setSelected((prev) => prev.filter((s) => !ids.includes(s.id)));
+                            // Invalidate to ensure fresh data
+                            invalidateParents();
+                        },
+                        onError: (err: any) => {
+                            show("error", "Deletion Error", err?.message || "Failed to delete parent record(s), please try again.");
+                        },
+                        onSettled: () => {
+                            setDeletingIds([]);
+                        },
+                    });
                 },
             });
         },
-        [show]
+        [deleteMutation, invalidateParents, show]
     );
 
-    // A helper function to delete single record
+    // Delete single
     const deleteOne = useCallback(
         (id: string) => {
             confirmDelete([id]);
@@ -138,59 +182,11 @@ const Parents: React.FC<ParentsProps> = ({
         [confirmDelete]
     );
 
-    // A helper function to handle navigation to new page
-    const handleNew = useCallback(() => {
-        router.push(`/dashboard/${role}/parents/new`);
-    }, [role]);
+    // Combined loading state
+    const loading = isFetchingParents || isFetching || deleteMutation.isPending || deletingIds.length > 0;
 
-    // A helper function to handle navigation to view page
-    const handleView = useCallback((currentParent: any) => {
-        router.push(`/dashboard/${role}/parents/${currentParent?.id}/view`);
-    }, [role]);
-
-    // A helper function to handle navigation to edit page
-    const handleEdit = useCallback((currentParent: any) => {
-        router.push(`/dashboard/${role}/parents/${currentParent?.id}/edit`);
-    }, [role]);
-
-    // A helper function to display action body
-    const actionBody = useCallback(
-        (row: any) => (
-            <Button
-                icon="pi pi-ellipsis-v"
-                className="p-button-text hover:bg-transparent hover:border-none hover:shadow-none"
-                onClick={e => {
-                    setCurrent(row);
-                    panel.current?.toggle(e);
-                }}
-            />
-        ),
-        []
-    );
-
-    // A helper function to display context menu
-    const getOverlayActions = useCallback((currentParent: any) => {
-        return [
-            {
-                label: "View",
-                icon: <Eye className="w-4 h-4 mr-2" />,
-                action: () => currentParent && handleView(currentParent)
-            },
-            {
-                label: "Edit",
-                icon: <Edit className="w-4 h-4 mr-2" />,
-                action: () => currentParent && handleEdit(currentParent)
-            },
-            {
-                label: "Delete",
-                icon: <Trash2 className="w-4 h-4 mr-2" />,
-                action: () => currentParent && deleteOne(currentParent.id)
-            },
-        ];
-    }, [role, deleteOne, handleEdit, handleView]);
-
-    // Loading effect
-    if (loading) {
+    // Render loading skeleton
+    if (loading && (!parents || parents.length === 0)) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
@@ -203,9 +199,10 @@ const Parents: React.FC<ParentsProps> = ({
     return (
         <section className="flex flex-col w-full py-3 px-4">
             <Toast ref={toast} />
-            {(deletingIds.length > 0 || updatingIds.length > 0) && (
+            {(deletingIds.length > 0 || updatingIds.length > 0 || deleteMutation.isPending) && (
                 <Spinner visible onHide={() => { setDeletingIds([]); setUpdatingIds([]); }} />
             )}
+
             <div className="bg-white rounded-md shadow-md space-y-4">
                 {/* Page header */}
                 <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 p-4">
@@ -230,13 +227,13 @@ const Parents: React.FC<ParentsProps> = ({
                     )}
                 </header>
 
-                {/* Search input section */}
+                {/* Search input */}
                 <div className="px-2 border-t border-gray-200 py-4">
                     <span className="p-input-icon-left block">
                         <i className="pi pi-search ml-2" />
                         <InputText
                             placeholder="Search parents..."
-                            onInput={e =>
+                            onInput={(e) =>
                                 setFilters({ global: { value: e.currentTarget.value, matchMode: FilterMatchMode.CONTAINS } })
                             }
                             className="w-full rounded focus:ring-1 focus:ring-cyan-500 focus:outline-none focus:outline-0 px-8 py-2 transition-all duration-300"
@@ -245,7 +242,7 @@ const Parents: React.FC<ParentsProps> = ({
                 </div>
 
                 {/* DataTable */}
-                <div className="">
+                <div>
                     <DataTable
                         value={parents}
                         paginator
@@ -254,13 +251,12 @@ const Parents: React.FC<ParentsProps> = ({
                         stripedRows
                         filters={filters}
                         filterDisplay="menu"
-                        // ensure the global filter covers name, phone and gender
                         globalFilterFields={["fullname", "phoneNumber", "gender"]}
                         scrollable
                         scrollHeight="400px"
                         dataKey="id"
                         selection={selected}
-                        onSelectionChange={e => setSelected(e.value)}
+                        onSelectionChange={(e) => setSelected(e.value)}
                         loading={loading}
                         emptyMessage="No parents found."
                         selectionMode="multiple"
@@ -270,7 +266,7 @@ const Parents: React.FC<ParentsProps> = ({
                         <Column
                             field="fullname"
                             header="Name"
-                            body={(rowData) => rowData?.fullname || '–'}
+                            body={(rowData) => rowData?.fullname || "–"}
                             sortable
                             filter
                             filterMatchMode={FilterMatchMode.CONTAINS}
@@ -285,32 +281,34 @@ const Parents: React.FC<ParentsProps> = ({
                     </DataTable>
                 </div>
             </div>
+
             {selected.length > 0 && (
                 <div className="mt-4">
                     <Button
                         label={`Delete ${selected.length} parent(s)`}
                         icon="pi pi-trash"
                         className="p-button-danger"
-                        onClick={() => confirmDelete(selected.map(s => s.id))}
+                        onClick={() => confirmDelete(selected.map((s) => s.id))}
                         loading={deletingIds.length > 0}
-                        disabled={deletingIds.length > 0 || updatingIds.length > 0}
+                        disabled={deletingIds.length > 0 || updatingIds.length > 0 || deleteMutation.isPending}
                     />
                 </div>
             )}
 
             <OverlayPanel ref={panel} className="shadow-lg rounded-md">
                 <div className="flex flex-col w-48 bg-white rounded-md">
-                    {current && getOverlayActions(current).map(({ label, icon, action }) => (
-                        <Button
-                            key={label}
-                            className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
-                            onClick={action}
-                            disabled={current && updatingIds.includes(current.id)}
-                        >
-                            {icon}
-                            <span className="ml-2">{label}</span>
-                        </Button>
-                    ))}
+                    {current &&
+                        getOverlayActions(current).map(({ label, icon, action }) => (
+                            <Button
+                                key={label}
+                                className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
+                                onClick={action}
+                                disabled={current && deletingIds.includes(current.id)}
+                            >
+                                {icon}
+                                <span className="ml-2">{label}</span>
+                            </Button>
+                        ))}
                 </div>
             </OverlayPanel>
         </section>

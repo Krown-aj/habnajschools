@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,6 +14,9 @@ import { Toast } from "primereact/toast";
 import { studentSchema, StudentSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
 import Uploader from "@/components/Uploader/Uploader";
+import { useGetClasses } from "@/hooks/useClasses";
+import { useGetParents } from "@/hooks/useParents";
+import { useCreateStudent } from "@/hooks/useStudents";
 
 // Define option interface
 interface Option {
@@ -67,11 +70,14 @@ const religionOptions = [
 const NewStudent: React.FC = () => {
     const router = useRouter();
     const toast = useRef<Toast>(null);
-    const [saving, setSaving] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [parents, setParents] = useState<Option[]>([]);
-    const [classes, setClasses] = useState<Option[]>([]);
     const [uploaded, setUploaded] = useState<{ path: string; id: string; url?: string | null } | null>(null);
+
+    // Fetch all parents
+    const { data: parentData, isLoading: isLoadingParents, isError: isErrorParents } = useGetParents();
+    // Fetch all classes
+    const { data: classData, isLoading: isLoadingClasses, isError: isErrorClasses } = useGetClasses();
+    // Mutation hook for creating a student
+    const createStudentMutation = useCreateStudent();
 
     const {
         register,
@@ -79,7 +85,6 @@ const NewStudent: React.FC = () => {
         handleSubmit,
         reset,
         formState: { errors },
-        watch,
     } = useForm({
         resolver: zodResolver(studentSchema),
         mode: "onBlur",
@@ -102,60 +107,36 @@ const NewStudent: React.FC = () => {
         },
     });
 
-    // Fetch parents, and classes on component mount
+    // Transform parent data for the dropdown options, memoized for performance
+    const parentOptions: Option[] = useMemo(() => {
+        if (!parentData || !Array.isArray(parentData)) return [];
+        return parentData.map((parent) => ({
+            label: `${parent.title ? parent.title + " " : ""}${parent.firstname} ${parent.surname} ${parent.othername ? parent.othername : ""}`.trim(),
+            value: parent.id,
+        }));
+    }, [parentData]);
+
+    // Transform class data for the dropdown options, memoized for performance
+    const classOptions: Option[] = useMemo(() => {
+        if (!classData || !Array.isArray(classData)) return [];
+        return classData.map((cls) => ({
+            label: cls.name,
+            value: cls.id,
+        }));
+    }, [classData]);
+
+    // Log any data fetching errors
     useEffect(() => {
-        const controller = new AbortController();
-        let mounted = true;
-
-        const fetchData = async () => {
-            if (mounted) setLoading(true);
-            try {
-                // Fetch parents
-                const parentRes = await fetch("/api/parents", {
-                    signal: controller.signal,
-                });
-                if (!parentRes.ok) throw new Error(`Failed to fetch parents (status ${parentRes.status})`);
-                const parentData = await parentRes.json();
-                if (!Array.isArray(parentData.data)) throw new Error("Unexpected response shape — expected array for parents");
-                const parentOpts: Option[] = parentData.data.map((parent: any) => ({
-                    label: `${parent.title ? parent.title + " " : ""}${parent.firstname} ${parent.surname} ${parent.othername ? parent.othername : ""}`.trim(),
-                    value: parent.id,
-                }));
-                if (mounted) setParents(parentOpts);
-
-                // Fetch classes
-                const classRes = await fetch("/api/classes", {
-                    signal: controller.signal,
-                });
-                if (!classRes.ok) throw new Error(`Failed to fetch classes (status ${classRes.status})`);
-                const classData = await classRes.json();
-                if (!Array.isArray(classData.data)) throw new Error("Unexpected response shape — expected array for classes");
-                const classOpts: Option[] = classData.data.map((cls: any) => ({
-                    label: cls.name,
-                    value: cls.id,
-                }));
-                if (mounted) setClasses(classOpts);
-            } catch (err: any) {
-                if (err?.name === "AbortError") return;
-                console.error("Unexpected fetch error:", err);
-                toast?.current?.show({
-                    severity: "error",
-                    summary: "Error",
-                    detail: "Could not fetch data.",
-                    life: 3000,
-                });
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        fetchData();
-
-        return () => {
-            mounted = false;
-            controller.abort();
-        };
-    }, []);
+        if (isErrorParents || isErrorClasses) {
+            console.error("Data fetching error for parents or classes");
+            toast.current?.show({
+                severity: "error",
+                summary: "Error",
+                detail: "Could not fetch parents or classes data.",
+                life: 3000,
+            });
+        }
+    }, [isErrorParents, isErrorClasses]);
 
     // A helper function to handle toast display
     const show = (
@@ -171,37 +152,38 @@ const NewStudent: React.FC = () => {
         router.back();
     };
 
-    // A function to submit data to API for saving
+    // A function to submit data using the useMutation hook
     const onSubmit = async (data: StudentSchema) => {
-        setSaving(true);
+        const normalizedBirthday: Date | undefined =
+            data.birthday === undefined || data.birthday === null
+                ? undefined
+                : typeof data.birthday === "string"
+                    ? new Date(data.birthday)
+                    : data.birthday;
+
+        const payload = {
+            ...data,
+            birthday: normalizedBirthday,
+            admissiondate: new Date(),
+            password: "password",
+            avarta: uploaded ? uploaded.path : "",
+        };
+
         try {
-            const payload = {
-                ...data,
-                admissiondate: new Date(),
-                password: 'password',
-                avarta: uploaded ? uploaded.path : "",
-            };
-            const res = await fetch("/api/students", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-            const result = await res.json();
-            if (res.ok) {
-                show("success", "Student Created", "New student has been created successfully.");
-                setTimeout(() => {
-                    reset();
-                    router.back();
-                }, 1500);
-            } else {
-                show("error", "Creation Error", result.error || result.message || "Failed to create new student record, please try again.");
-            }
+            await createStudentMutation.mutateAsync(payload);
+            show("success", "Student Created", "New student has been created successfully.");
+            setTimeout(() => {
+                reset();
+                router.back();
+            }, 1500);
         } catch (err: any) {
-            show("error", "Creation Error", err.message || "Could not create new student record.");
-        } finally {
-            setSaving(false);
+            console.error("Mutation Error:", err);
+            show("error", "Creation Error", err.message || "Failed to create new student record, please try again.");
         }
     };
+
+    const loading = isLoadingParents || isLoadingClasses;
+    const saving = createStudentMutation.isPending;
 
     // Loading effect during fetching
     if (loading) {
@@ -217,7 +199,7 @@ const NewStudent: React.FC = () => {
     return (
         <section className="w-[96%] max-w-2xl bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
-            {saving && <Spinner visible onHide={() => setSaving(false)} />}
+            {saving && <Spinner visible onHide={() => createStudentMutation.reset()} />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900/80 p-4">Create New Student</h2>
                 <Button
@@ -398,11 +380,10 @@ const NewStudent: React.FC = () => {
                                 name="parentid"
                                 control={control}
                                 render={({ field }) => (
-                                    // Added filter props to enable a search box within the Dropdown
                                     <Dropdown
                                         id="parentid"
                                         value={field.value}
-                                        options={parents}
+                                        options={parentOptions} // Use memoized data
                                         onChange={(e) => field.onChange(e.value)}
                                         filter
                                         filterBy="label"
@@ -410,6 +391,7 @@ const NewStudent: React.FC = () => {
                                         showClear
                                         placeholder="Select Parent"
                                         className={errors.parentid ? "p-invalid w-full" : "w-full"}
+                                        disabled={loading} // Disable while loading
                                     />
                                 )}
                             />
@@ -424,9 +406,10 @@ const NewStudent: React.FC = () => {
                                     <Dropdown
                                         id="classid"
                                         {...field}
-                                        options={classes}
+                                        options={classOptions} // Use memoized data
                                         placeholder="Select Class"
                                         className={errors.classid ? "p-invalid w-full" : "w-full"}
+                                        disabled={loading} // Disable while loading
                                     />
                                 )}
                             />
@@ -434,7 +417,7 @@ const NewStudent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-rowjustify-end gap-2 mt-3">
+                    <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
                         <Button
                             label="Cancel"
                             type="button"
@@ -446,7 +429,7 @@ const NewStudent: React.FC = () => {
                             type="submit"
                             className="p-button-primary"
                             loading={saving}
-                            disabled={saving}
+                            disabled={saving || loading}
                         />
                     </div>
                 </form>

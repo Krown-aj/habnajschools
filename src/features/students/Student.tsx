@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Toast } from "primereact/toast";
 import { Badge } from "primereact/badge";
@@ -8,6 +8,10 @@ import { Button } from "primereact/button";
 import { TabView, TabPanel } from "primereact/tabview";
 import moment from "moment";
 import ImageView, { UploadResult } from "@/components/ImageView/ImageView";
+
+import { useGetStudentById, useUpdateStudent } from "@/hooks/useStudents";
+import { Student as StudentType } from '@/generated/prisma';
+import { deriveDropboxPath, resolveImageSrcFallback } from "@/lib/utils/dropbox";
 
 type StudentProps = {
     title?: string;
@@ -19,136 +23,69 @@ type StudentProps = {
 const Student: React.FC<StudentProps> = () => {
     const router = useRouter();
     const params = useParams();
-    const [studentData, setStudentData] = useState<any>(null);
-    const toast = useRef<Toast>(null);
-    const [loading, setLoading] = useState(false);
-    const studentId = params.id;
+    const studentId = typeof params.id === 'string' ? params.id : undefined;
 
-    // Tab control
+    const toast = useRef<Toast>(null);
     const [activeIndex, setActiveIndex] = useState<number>(0);
 
-    useEffect(() => {
-        const fetchStudentData = async () => {
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/students/${studentId}`, {
-                    method: "GET",
-                    headers: { "Content-Type": "application/json" },
-                });
-                const result = await res.json();
-                if (res.ok) {
-                    setStudentData(result.data || result);
-                } else {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Fetch Error",
-                        detail: result.error || "Could not fetch student data.",
-                    });
-                }
-            } catch (err: any) {
-                toast.current?.show({
-                    severity: "error",
-                    summary: "Fetch Error",
-                    detail: err.message || "Failed to fetch student data.",
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
+    const {
+        data: studentData,
+        isLoading: isStudentLoading,
+        error: fetchError,
+    } = useGetStudentById(studentId, {
+        enabled: !!studentId,
+        staleTime: 1000 * 60 * 5
+    });
 
-        if (studentId) fetchStudentData();
-    }, [studentId]);
+    const {
+        mutate: updateStudentMutation,
+        isPending: isUpdatePending,
+    } = useUpdateStudent();
+
+    // Show toast for fetch error
+    useEffect(() => {
+        if (fetchError) {
+            toast.current?.show({
+                severity: "error",
+                summary: "Fetch Error",
+                detail: fetchError.message || "Failed to fetch student data.",
+            });
+        }
+    }, [fetchError]);
 
     const handleBack = () => router.back();
 
-    // Determine whether avarta is a Dropbox path (leading slash) or an external URL
-    const deriveDropboxPath = (avarta: any): string | null => {
-        if (!avarta) return null;
-
-        // object with url
-        if (typeof avarta === "object" && typeof avarta.url === "string") {
-            const p = normalize(avarta.url);
-            return p.startsWith("/") ? p : null;
-        }
-
-        if (typeof avarta === "string") {
-            if (/^https?:\/\//i.test(avarta) || avarta.startsWith("data:")) return null;
-            // treat as relative/local path -> normalize to leading slash and treat as Dropbox path
-            const p = normalize(avarta);
-            return p.startsWith("/") ? p : null;
-        }
-
-        return null;
-
-        function normalize(p: string) {
-            const cleaned = p.replace(/^(\.\/|\.\.\/)+/, "");
-            return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
-        }
-    };
-
-    const resolveImageSrcFallback = (avarta: any) => {
-        const onlinePlaceholder = `https://www.gravatar.com/avatar/?d=mp&s=128`; // generic silhouette
-        const publicFallback = "/assets/profile1.png";
-
-        if (!avarta) return onlinePlaceholder;
-
-        if (typeof avarta === "object") {
-            if (typeof avarta.url === "string" && avarta.url.length > 0) return normalize(avarta.url);
-            return onlinePlaceholder;
-        }
-
-        if (typeof avarta === "string") {
-            if (/^https?:\/\//i.test(avarta) || avarta.startsWith("data:")) return avarta;
-            return normalize(avarta);
-        }
-
-        return onlinePlaceholder;
-
-        function normalize(p: string) {
-            const cleaned = p.replace(/^(\.\/|\.\.\/)+/, "");
-            if (!cleaned || cleaned.startsWith("src/") || cleaned.startsWith("assets/")) return publicFallback;
-            return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
-        }
-    };
-
-    // Handle update coming back from ImageView (after successful upload)
+    // Handle update coming back from ImageView
     const handleAvatarChange = useCallback(
         async (meta: UploadResult) => {
-            setStudentData((prev: any) => ({ ...prev, avarta: meta.path }));
-
             if (!studentId) {
                 toast.current?.show({ severity: "warn", summary: "Warning", detail: "No student ID to save avatar." });
                 return;
             }
 
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/students/${studentId}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ avarta: meta.path }),
-                });
-                let json: any = {};
-                try { json = await res.json(); } catch { }
-
-                if (!res.ok) {
-                    const msg = json?.error || `Failed to save avatar (status ${res.status})`;
-                    throw new Error(msg);
-                }
-
-                toast.current?.show({ severity: "success", summary: "Saved", detail: "Avatar updated successfully." });
-                return json;
-            } catch (err: any) {
-                toast.current?.show({ severity: "error", summary: "Save failed", detail: err.message || String(err) });
-                throw err;
-            } finally {
-                setLoading(false);
-            }
+            updateStudentMutation({ id: studentId, data: { avarta: meta.path } }, {
+                onSuccess: () => {
+                    toast.current?.show({ severity: "success", summary: "Saved", detail: "Avatar updated successfully." });
+                },
+                onError: (err) => {
+                    toast.current?.show({ severity: "error", summary: "Save failed", detail: err.message || "Failed to save avatar." });
+                },
+            });
         },
-        [studentId]
+        [studentId, updateStudentMutation]
     );
 
-    if (loading) {
+    const isLoading = isStudentLoading || isUpdatePending;
+
+    // Use memoized values for image props
+    const imageProps = useMemo(() => {
+        const path = deriveDropboxPath(studentData?.avarta);
+        const fallback = resolveImageSrcFallback(studentData?.avarta);
+        return { path, fallback };
+    }, [studentData?.avarta]);
+
+    // Handle loading state
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
@@ -158,37 +95,42 @@ const Student: React.FC<StudentProps> = () => {
         );
     }
 
-    const imageDropboxPath = deriveDropboxPath(studentData?.avarta);
-    const fallbackImageSrc = resolveImageSrcFallback(studentData?.avarta);
+    // Handle case where student is not found after loading
+    if (!studentData && !isStudentLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-8">
+                <h2 className="text-2xl font-bold text-red-600 mb-4">Student Not Found 😔</h2>
+                <p className="text-gray-600 mb-6">The student record with ID: **{studentId}** could not be loaded or does not exist.</p>
+                <Button
+                    label="Go Back"
+                    icon="pi pi-arrow-left"
+                    onClick={handleBack}
+                    className="p-button-secondary"
+                />
+            </div>
+        );
+    }
+
+    const imageDropboxPath = imageProps.path;
+    const fallbackImageSrc = imageProps.fallback;
 
     return (
         <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 p-4 sm:p-6 lg:p-12">
             <div className="max-w-7xl mx-auto">
-                <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+                <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8 bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-indigo-50 shadow-sm text-indigo-600 overflow-hidden">
-                            {imageDropboxPath ? (
-                                <ImageView
-                                    path={imageDropboxPath}
-                                    onChange={handleAvatarChange}
-                                    placeholder={typeof fallbackImageSrc === "string" ? fallbackImageSrc : "/assets/profile1.png"}
-                                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl"
-                                    width={64}
-                                    height={64}
-                                    alt={studentData?.firstname ? `${studentData.firstname}'s profile` : "profile"}
-                                    editable={true}
-                                />
-                            ) : (
-                                <ImageView
-                                    path={null}
-                                    placeholder={typeof fallbackImageSrc === "string" ? fallbackImageSrc : "/assets/profile1.png"}
-                                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl"
-                                    width={64}
-                                    height={64}
-                                    alt={studentData?.firstname ? `${studentData.firstname}'s profile` : "profile"}
-                                    editable={false}
-                                />
-                            )}
+                            {/* ImageView component using computed path and fallback */}
+                            <ImageView
+                                path={imageDropboxPath}
+                                onChange={handleAvatarChange}
+                                placeholder={typeof fallbackImageSrc === "string" ? fallbackImageSrc : "/assets/profile1.png"}
+                                className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl"
+                                width={64}
+                                height={64}
+                                alt={studentData?.firstname ? `${studentData.firstname}'s profile` : "profile"}
+                                editable={!isUpdatePending}
+                            />
                         </div>
 
                         <div>
@@ -205,7 +147,6 @@ const Student: React.FC<StudentProps> = () => {
                             label="Back"
                             onClick={handleBack}
                             className="bg-red-500 border border-red-200 rounded-xl shadow-sm text-xs sm:text-sm font-medium hover:shadow-md hover:bg-red-600 transition-all duration-300"
-                            aria-disabled
                         />
                     </div>
                 </header>
@@ -240,9 +181,8 @@ const Student: React.FC<StudentProps> = () => {
 
                                                 <div>
                                                     <dt className="font-semibold">Class</dt>
-                                                    <dd>{studentData?.class?.name || "–"}</dd>
+                                                    <dd>{(studentData as StudentType & { class?: { name: string } })?.class?.name || "–"}</dd>
                                                 </div>
-
 
                                                 <div>
                                                     <dt className="font-semibold">Active Status</dt>
@@ -265,7 +205,8 @@ const Student: React.FC<StudentProps> = () => {
                                                 </div>
                                                 <div>
                                                     <dt className="font-semibold">Guardian</dt>
-                                                    <dd>{`${studentData?.parent?.title || ""} ${studentData?.parent?.firstname || ""} ${studentData?.parent?.othername || ""} ${studentData?.parent?.surname || ""}`.trim() || "–"}</dd>
+                                                    {/* Assuming parent data is included and has necessary fields */}
+                                                    <dd>{`${(studentData as any)?.parent?.title || ""} ${(studentData as any)?.parent?.firstname || ""} ${(studentData as any)?.parent?.othername || ""} ${(studentData as any)?.parent?.surname || ""}`.trim() || "–"}</dd>
                                                 </div>
                                                 <div>
                                                     <dt className="font-semibold">House</dt>
@@ -278,7 +219,8 @@ const Student: React.FC<StudentProps> = () => {
                                                 <div className="flex items-center gap-3">
                                                     <div>
                                                         <dt className="font-semibold">Total Attendances</dt>
-                                                        <dd><Badge value={studentData?._count?.attendances ?? (studentData?.attendances?.length ?? 0)} severity="info" /></dd>
+                                                        {/* Assuming _count.attendances or attendances.length is available */}
+                                                        <dd><Badge value={(studentData as any)?._count?.attendances ?? ((studentData as any)?.attendances?.length ?? 0)} severity="info" /></dd>
                                                     </div>
                                                 </div>
                                             </dl>
@@ -287,7 +229,8 @@ const Student: React.FC<StudentProps> = () => {
                                 </TabPanel>
 
                                 <TabPanel header="Attendance">
-                                    {studentData?.attendances?.length > 0 ? (
+                                    {/* Assuming studentData.attendances is an array if included in the query result */}
+                                    {(studentData as any)?.attendances?.length > 0 ? (
                                         <div className="overflow-x-auto sm:overflow-x-visible scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                                             <table className="w-full min-w-[500px] text-xs sm:text-sm text-left text-gray-600">
                                                 <thead className="text-xs sm:text-sm text-gray-700 uppercase bg-gray-50">
@@ -297,7 +240,7 @@ const Student: React.FC<StudentProps> = () => {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {studentData.attendances.map((attendance: any) => (
+                                                    {(studentData as any).attendances.map((attendance: any) => (
                                                         <tr key={attendance.id} className="bg-white border-b border-gray-300 hover:bg-gray-50">
                                                             <td className="px-2 sm:px-4 py-3">{attendance.date ? new Date(attendance.date).toLocaleDateString() : "–"}</td>
                                                             <td className="px-2 sm:px-4 py-3">{attendance.status || "–"}</td>

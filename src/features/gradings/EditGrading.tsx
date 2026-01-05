@@ -12,6 +12,9 @@ import { Checkbox } from "primereact/checkbox";
 
 import { gradingUpdateSchema, GradingUpdateSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
+import { useGetTerms } from "@/hooks/useTerms";
+import { useGetGradingPolicies } from "@/hooks/useGradingPolicies";
+import { useGetGradingById, useUpdateGrading, useInvalidateGradings } from "@/hooks/useGradings";
 
 // Define option interface
 interface Option {
@@ -31,11 +34,46 @@ const EditGrading: React.FC = () => {
     const params = useParams();
     const toast = useRef<Toast>(null);
     const [saving, setSaving] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [sessions, setSessions] = useState<Option[]>([]);
-    const [gradingPolicies, setGradingPolicies] = useState<Option[]>([]);
-    const gradingId = params.id;
 
+    const gradingId = (params as any)?.id as string | undefined;
+
+    // React Query hooks
+    const { data: terms = [], isLoading: termsLoading, isError: termsError } = useGetTerms();
+    const { data: policies = [], isLoading: policiesLoading, isError: policiesError } = useGetGradingPolicies();
+    const {
+        data: gradingData,
+        isLoading: gradingLoading,
+        isError: gradingError,
+        error: gradingLoadError,
+        refetch: refetchGrading,
+    } = useGetGradingById(gradingId, { enabled: Boolean(gradingId) });
+
+    const updateMutation = useUpdateGrading();
+    const invalidateGradings = useInvalidateGradings();
+
+    // derive session options from terms
+    const [sessions, setSessions] = useState<Option[]>([]);
+    useEffect(() => {
+        const sessionSet = new Set<string>();
+        if (Array.isArray(terms)) {
+            terms.forEach((t: any) => {
+                if (t?.session) sessionSet.add(t.session);
+            });
+        }
+        setSessions(Array.from(sessionSet).map(s => ({ label: s, value: s })));
+    }, [terms]);
+
+    // derive grading policy options
+    const [gradingPolicies, setGradingPolicies] = useState<Option[]>([]);
+    useEffect(() => {
+        if (Array.isArray(policies)) {
+            setGradingPolicies(policies.map((p: any) => ({ label: p.title, value: p.id })));
+        } else {
+            setGradingPolicies([]);
+        }
+    }, [policies]);
+
+    // react-hook-form setup
     const {
         register,
         control,
@@ -54,140 +92,49 @@ const EditGrading: React.FC = () => {
         },
     });
 
-    // Fetch grading data, sessions (from terms), and grading policies on component mount
+    // populate form with gradingData when it arrives
     useEffect(() => {
-        const controller = new AbortController();
-        let mounted = true;
-
-        const fetchData = async () => {
-            if (mounted) setLoading(true);
-            try {
-                if (!gradingId) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Invalid Grading",
-                        detail: "Grading ID is missing.",
-                        life: 3000,
-                    });
-                    return;
-                }
-
-                // Fetch grading, terms, and grading policies concurrently
-                const [gradingResponse, termsResponse, policiesResponse] = await Promise.all([
-                    fetch(`/api/gradings/${gradingId}`, { signal: controller.signal }),
-                    fetch("/api/terms", { signal: controller.signal }),
-                    fetch("/api/policies", { signal: controller.signal }),
-                ]);
-
-                // Handle grading response
-                if (!gradingResponse.ok) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Fetching Error",
-                        detail: "Failed to load grading data.",
-                        life: 3000,
-                    });
-                    return;
-                }
-                const gradingPayload = await gradingResponse.json();
-                if (!gradingPayload) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Parsing Error",
-                        detail: "Grading response format invalid.",
-                        life: 3000,
-                    });
-                    return;
-                }
-                const gradingData = gradingPayload.data || gradingPayload;
-                setValue("title", gradingData.title || "");
-                setValue("session", gradingData.session || "");
-                setValue("term", gradingData.term || undefined);
-                setValue("published", gradingData.published || false);
-                setValue("gradingPolicyId", gradingData.gradingPolicyId || "");
-
-                // Handle terms response to derive sessions
-                if (!termsResponse.ok) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Fetching Error",
-                        detail: "Failed to load terms data.",
-                        life: 3000,
-                    });
-                    return;
-                }
-                const termsData = await termsResponse.json();
-                if (!Array.isArray(termsData.data)) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Parsing Error",
-                        detail: "Unexpected response shape — expected array for terms.",
-                        life: 3000,
-                    });
-                    return;
-                }
-                const sessionSet = new Set<string>(termsData.data.map((term: any) => term.session));
-                const sessionOptions: Option[] = Array.from(sessionSet).map((session: string) => ({
-                    label: session,
-                    value: session,
-                }));
-                if (mounted) setSessions(sessionOptions);
-
-                // Handle grading policies response
-                if (!policiesResponse.ok) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Fetching Error",
-                        detail: "Failed to load grading policies data.",
-                        life: 3000,
-                    });
-                    return;
-                }
-                const policiesData = await policiesResponse.json();
-                const policyOptions: Option[] = policiesData.data.map((policy: any) => ({
-                    label: policy.title,
-                    value: policy.id,
-                }));
-                if (mounted) setGradingPolicies(policyOptions);
-            } catch (err: any) {
-                if (err?.name === "AbortError") return;
-                console.error("Unexpected fetch error:", err);
-                toast.current?.show({
-                    severity: "error",
-                    summary: "Error",
-                    detail: "An unexpected error occurred while loading data.",
-                    life: 3000,
-                });
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        if (gradingId) {
-            fetchData();
+        if (gradingData) {
+            setValue("title", gradingData.title ?? "");
+            setValue("session", gradingData.session ?? "");
+            setValue("term", gradingData.term ?? undefined);
+            setValue("published", gradingData.published ?? false);
+            setValue("gradingPolicyId", gradingData.gradingPolicyId ?? "");
         }
+    }, [gradingData, setValue]);
 
-        return () => {
-            mounted = false;
-            controller.abort();
-        };
-    }, [gradingId, setValue]);
+    // show loading errors
+    useEffect(() => {
+        if (gradingError) {
+            toast.current?.show({
+                severity: "error",
+                summary: "Load Error",
+                detail: (gradingLoadError as any)?.message || "Failed to load grading data.",
+                life: 4000,
+            });
+        }
+    }, [gradingError, gradingLoadError]);
 
-    // A helper function to handle toast display
-    const show = (
-        severity: "success" | "error",
-        summary: string,
-        detail: string
-    ) => {
+    useEffect(() => {
+        if (termsError) {
+            toast.current?.show({ severity: "error", summary: "Load Error", detail: "Failed to load sessions (terms).", life: 3000 });
+        }
+    }, [termsError]);
+
+    useEffect(() => {
+        if (policiesError) {
+            toast.current?.show({ severity: "error", summary: "Load Error", detail: "Failed to load grading policies.", life: 3000 });
+        }
+    }, [policiesError]);
+
+    const show = (severity: "success" | "error", summary: string, detail: string) => {
         toast.current?.show({ severity, summary, detail, life: 3000 });
     };
 
-    // A helper function to handle back navigation
     const handleBack = () => {
         router.back();
     };
 
-    // A function to submit data to API for updating
     const onSubmit = async (data: GradingUpdateSchema) => {
         setSaving(true);
         try {
@@ -197,29 +144,22 @@ const EditGrading: React.FC = () => {
                 return;
             }
 
-            const payload = { ...data };
-            const res = await fetch(`/api/gradings/${gradingId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-            const result = await res.json();
-            if (res.ok) {
-                show("success", "Grading Updated", "Grading session has been updated successfully.");
-                setTimeout(() => {
-                    router.back();
-                }, 1500);
-            } else {
-                show("error", "Update Error", result.error || result.message || "Failed to update grading session, please try again.");
-            }
+            // call optimistic update mutation
+            await updateMutation.mutateAsync({ id: gradingId, data });
+
+            show("success", "Grading Updated", "Grading session has been updated successfully.");
+            invalidateGradings();
+            setTimeout(() => router.back(), 600);
         } catch (err: any) {
-            show("error", "Update Error", err.message || "Could not update grading session.");
+            const msg = err?.message || "Failed to update grading session, please try again.";
+            show("error", "Update Error", msg);
         } finally {
             setSaving(false);
         }
     };
 
-    // Loading effect during fetching
+    const loading = gradingLoading || termsLoading || policiesLoading;
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -247,11 +187,7 @@ const EditGrading: React.FC = () => {
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
                     <div className="p-field">
                         <label htmlFor="title">Title</label>
-                        <InputText
-                            id="title"
-                            {...register("title")}
-                            className={errors.title ? "p-invalid w-full" : "w-full"}
-                        />
+                        <InputText id="title" {...register("title")} className={errors.title ? "p-invalid w-full" : "w-full"} />
                         {errors.title && <small className="p-error">{errors.title.message}</small>}
                     </div>
 
@@ -317,13 +253,7 @@ const EditGrading: React.FC = () => {
                             control={control}
                             defaultValue={false}
                             render={({ field }) => (
-                                <Checkbox
-                                    id="published"
-                                    inputId="published"
-                                    onChange={(e) => field.onChange(e.checked)}
-                                    checked={field.value ?? false}
-                                    className="ml-2"
-                                />
+                                <Checkbox id="published" inputId="published" onChange={(e) => field.onChange(e.checked)} checked={field.value ?? false} className="ml-2" />
                             )}
                         />
                         {errors.published && <small className="p-error">{errors.published.message}</small>}
@@ -331,19 +261,8 @@ const EditGrading: React.FC = () => {
 
                     {/* Action Buttons */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
-                        <Button
-                            label="Cancel"
-                            type="button"
-                            outlined
-                            onClick={handleBack}
-                        />
-                        <Button
-                            label="Update"
-                            type="submit"
-                            className="p-button-primary"
-                            loading={saving}
-                            disabled={saving}
-                        />
+                        <Button label="Cancel" type="button" outlined onClick={handleBack} />
+                        <Button label="Update" type="submit" className="p-button-primary" loading={saving} disabled={saving} />
                     </div>
                 </form>
             </div>

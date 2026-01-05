@@ -42,6 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 othername: true,
                 birthday: true,
                 bloodgroup: true,
+                qualification: true,
                 state: true,
                 lga: true,
                 address: true,
@@ -120,7 +121,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, teacherUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, firstname, surname, othername, birthday, bloodgroup, gender, state, lga, email, phone, address, avarta, password, active, section } = bodyValidation.data!;
+        const { title, firstname, surname, othername, birthday, bloodgroup, gender, state, lga, email, phone, address, avarta, password, active, section, qualification } = bodyValidation.data!;
 
         // Check for email or phone conflicts
         if (email || phone) {
@@ -148,6 +149,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (othername !== undefined) updateData.othername = othername;
         if (birthday) updateData.birthday = birthday;
         if (bloodgroup !== undefined) updateData.bloodgroup = bloodgroup;
+        if (qualification) updateData.qualification = qualification;
         if (gender) updateData.gender = gender;
         if (state) updateData.state = state;
         if (lga) updateData.lga = lga;
@@ -170,6 +172,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 othername: true,
                 birthday: true,
                 bloodgroup: true,
+                qualification: true,
                 avarta: true,
                 email: true,
                 phone: true,

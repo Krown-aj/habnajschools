@@ -10,20 +10,19 @@ import { Dropdown } from "primereact/dropdown";
 import { Button } from "primereact/button";
 import { Toast } from "primereact/toast";
 import Uploader from "@/components/Uploader/Uploader";
+import Spinner from "@/components/Spinner/Spinner";
 
 import { administrationSchema, AdministrationSchema } from "@/lib/schemas/index";
-import Spinner from "@/components/Spinner/Spinner";
+import { useCreateAdministration } from "@/hooks/useAdministrations";
 
 const NewAdmin: React.FC = () => {
     const router = useRouter();
     const toast = useRef<Toast>(null);
-    const [loading, setLoading] = useState(false);
     const [uploaded, setUploaded] = useState<{ path: string; id: string; url?: string | null } | null>(null);
     const { data: session } = useSession();
 
     const role = session?.user?.role || 'Guest';
 
-    // Define role options based on current user's role
     const roleOptions = role.toLowerCase() === 'super'
         ? [
             { label: "Admin", value: "Admin" },
@@ -33,12 +32,7 @@ const NewAdmin: React.FC = () => {
             { label: "Admin", value: "Admin" },
         ];
 
-    const {
-        control,
-        handleSubmit,
-        reset,
-        formState: { errors },
-    } = useForm({
+    const { control, handleSubmit, reset, formState: { errors } } = useForm({
         resolver: zodResolver(administrationSchema),
         mode: "onBlur",
         defaultValues: {
@@ -50,54 +44,34 @@ const NewAdmin: React.FC = () => {
         },
     });
 
-    // A helper function to handle toast display
-    const show = (
-        severity: "success" | "error",
-        summary: string,
-        detail: string
-    ) => {
+    const createAdminMutation = useCreateAdministration();
+
+    const show = (severity: "success" | "error", summary: string, detail: string) => {
         toast.current?.show({ severity, summary, detail, life: 3000 });
     };
 
-    // A helper function to handle back navigation
-    const handleBack = () => {
-        router.back();
-    };
+    const handleBack = () => router.back();
 
-    // A function to submit data to api for saving
-    const onSubmit = async (data: AdministrationSchema) => {
-        setLoading(true);
-        try {
-            const payload = {
-                ...data,
-                avarta: uploaded ? uploaded.path : null,
-            };
-            const res = await fetch("/api/administrations", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-            const result = await res.json();
-            if (res.ok) {
+    const onSubmit = (data: AdministrationSchema) => {
+        const payload = { ...data, avatar: uploaded ? uploaded.path : null };
+        createAdminMutation.mutate(payload, {
+            onSuccess: () => {
                 show("success", "Admin Created", "New Admin has been created successfully.");
                 setTimeout(() => {
                     reset();
                     router.back();
                 }, 1500);
-            } else {
-                show("error", "Creation Error", result.error || result.message || "Failed to create admin.");
+            },
+            onError: (err: any) => {
+                show("error", "Creation Error", err.message || "Failed to create admin.");
             }
-        } catch (err: any) {
-            show("error", "Creation Error", err.message || "An error occurred while creating admin.");
-        } finally {
-            setLoading(false);
-        }
+        });
     };
 
     return (
         <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
-            {loading && <Spinner visible onHide={() => setLoading(false)} />}
+            {createAdminMutation.isPending && <Spinner visible onHide={() => { }} />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900/80 p-4">Create New System Administrator</h2>
                 <Button
@@ -182,8 +156,8 @@ const NewAdmin: React.FC = () => {
                             label="Save"
                             type="submit"
                             className="p-button-primary"
-                            loading={loading}
-                            disabled={loading}
+                            loading={createAdminMutation.isPending}
+                            disabled={createAdminMutation.isPending}
                         />
                     </div>
                 </form>

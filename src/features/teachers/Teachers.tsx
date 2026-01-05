@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { FaPlus } from "react-icons/fa";
 import { Trash2, Edit, Eye, Users } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -15,13 +15,22 @@ import { confirmDialog } from "primereact/confirmdialog";
 import { FilterMatchMode } from "primereact/api";
 import { Toast } from "primereact/toast";
 
+import { useGetTeachers, useDeleteTeachers } from "@/hooks/useTeachers";
 import Spinner from "@/components/Spinner/Spinner";
+import { Teacher as TeacherType } from '@/generated/prisma';
+
+// Extend TeacherType with computed fields for search/display
+type TeacherDisplayType = TeacherType & {
+    fullname: string;
+    emailAddress: string;
+    phoneNumber: string;
+    qualificationText: string;
+    genderText: string;
+};
 
 type TeachersProps = {
     title?: string;
     subtitle?: string;
-    ctaLabel?: string;
-    showSidebar?: boolean;
 };
 
 const Teachers: React.FC<TeachersProps> = ({
@@ -30,14 +39,21 @@ const Teachers: React.FC<TeachersProps> = ({
 }) => {
     const router = useRouter();
     const { data: session } = useSession();
-    const [teachers, setTeachers] = useState<any[]>([]);
-    const [selected, setSelected] = useState<any[]>([]);
-    const [current, setCurrent] = useState<any | null>(null);
-    const [deletingIds, setDeletingIds] = useState<string[]>([]);
-    const [updatingIds, setUpdatingIds] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [selected, setSelected] = useState<TeacherDisplayType[]>([]);
+    const [current, setCurrent] = useState<TeacherDisplayType | null>(null);
     const toast = useRef<Toast>(null);
     const panel = useRef<OverlayPanel>(null);
+
+    // Data Fetching with useQuery
+    const {
+        data: teachersData,
+        isLoading,
+        error: fetchError,
+        isFetching,
+    } = useGetTeachers();
+
+    // Data Deletion with useMutation
+    const deleteMutation = useDeleteTeachers();
 
     const [filters, setFilters] = useState<DataTableFilterMeta>({
         global: { value: null, matchMode: FilterMatchMode.CONTAINS } as DataTableFilterMetaData,
@@ -46,10 +62,28 @@ const Teachers: React.FC<TeachersProps> = ({
     const role = session?.user?.role || 'Guest';
     const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin';
 
-    // Fetch teachers data on mount
+    const isDeleting = deleteMutation.isPending;
+    const deletingIds = isDeleting ? (Array.isArray(deleteMutation.variables) ? deleteMutation.variables : [deleteMutation.variables]) : [];
+
+    // Map fetched data to include computed fields for display/search
+    const teachers: TeacherDisplayType[] = useMemo(() => {
+        if (!teachersData) return [];
+        return teachersData.map((t: TeacherType): TeacherDisplayType => ({
+            ...t,
+            fullname: `${t.title || ''} ${t.firstname || ''} ${t.othername || ''} ${t.surname || ''}`.replace(/\s+/g, ' ').trim(),
+            emailAddress: (t as any).email || (t as any).emailAddress || (t as any).contactEmail || '',
+            phoneNumber: (t as any).phone || (t as any).phoneNumber || (t as any).contact || '',
+            qualificationText: (t as any).qualification || '',
+            genderText: (t as any).gender || ''
+        }));
+    }, [teachersData]);
+
+    // Handle Fetch Error
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (fetchError) {
+            show("error", "Fetch Error", "Failed to fetch teachers record, please try again.");
+        }
+    }, [fetchError]);
 
     // Toast helper function
     const show = useCallback((
@@ -60,43 +94,7 @@ const Teachers: React.FC<TeachersProps> = ({
         toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
     }, []);
 
-    // Fetch teachers data and compute searchable fields
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch("/api/teachers");
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-
-            const mapped = (data?.data || []).map((t: any) => ({
-                ...t,
-                fullname: `${t.title || ''} ${t.firstname || ''} ${t.othername || ''} ${t.surname || ''}`.replace(/\s+/g, ' ').trim(),
-                emailAddress: t.email || t.emailAddress || t.contactEmail || '',
-                phoneNumber: t.phone || t.phoneNumber || t.contact || '',
-                qualificationText: t.qualification || '',
-                genderText: t.gender || ''
-            }));
-
-            setTeachers(mapped);
-        } catch (err) {
-            show("error", "Fetch Error", "Failed to fetch teachers record, please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // A helper function to make API call to delete records
-    const deleteApi = async (ids: string[]) => {
-        const query = ids.map(id => `ids=${encodeURIComponent(id)}`).join("&");
-        const res = await fetch(`/api/teachers?${query}`, { method: "DELETE" });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `Status ${res.status}`);
-        }
-        return res;
-    };
-
-    // A helper function to confirm user's action
+    // A helper function to confirm user's action and trigger mutation
     const confirmDelete = useCallback(
         (ids: string[]) => {
             confirmDialog({
@@ -108,28 +106,26 @@ const Teachers: React.FC<TeachersProps> = ({
                 icon: "pi pi-exclamation-triangle",
                 acceptClassName: "p-button-danger",
                 rejectClassName: "p-button-text",
-                accept: async () => {
-                    setDeletingIds(ids);
-                    try {
-                        await deleteApi(ids);
-                        show(
-                            "success",
-                            "Deleted",
-                            ids.length === 1
-                                ? "Record deleted successfully."
-                                : `${ids.length} records deleted successfully.`
-                        );
-                        setTeachers(prev => prev.filter(s => !ids.includes(s.id)));
-                        setSelected(prev => prev.filter(s => !ids.includes(s.id)));
-                    } catch (err: any) {
-                        show("error", "Deletion Error", err.message || "Failed to delete record, please try again.");
-                    } finally {
-                        setDeletingIds([]);
-                    }
+                accept: () => {
+                    deleteMutation.mutate(ids, {
+                        onSuccess: (data) => {
+                            show(
+                                "success",
+                                "Deleted",
+                                data.deleted === 1
+                                    ? "Record deleted successfully."
+                                    : `${data.deleted} records deleted successfully.`
+                            );
+                            setSelected(prev => prev.filter(s => !ids.includes(s.id)));
+                        },
+                        onError: (err) => {
+                            show("error", "Deletion Error", err.message || "Failed to delete record, please try again.");
+                        },
+                    });
                 },
             });
         },
-        [show]
+        [show, deleteMutation]
     );
 
     // A helper function to delete single record
@@ -144,21 +140,21 @@ const Teachers: React.FC<TeachersProps> = ({
     // A helper function to handle navigation to new page
     const handleNew = useCallback(() => {
         router.push(`/dashboard/${role}/teachers/new`);
-    }, [role]);
+    }, [role, router]);
 
     // A helper function to handle navigation to view page
-    const handleView = useCallback((currentTeacher: any) => {
-        router.push(`/dashboard/${role}/teachers/${currentTeacher?.id}/view`);
-    }, [role]);
+    const handleView = useCallback((currentTeacher: TeacherDisplayType) => {
+        router.push(`/dashboard/${role}/teachers/${currentTeacher.id}/view`);
+    }, [role, router]);
 
     // A helper function to handle navigation to edit page
-    const handleEdit = useCallback((currentTeacher: any) => {
-        router.push(`/dashboard/${role}/teachers/${currentTeacher?.id}/edit`);
-    }, [role]);
+    const handleEdit = useCallback((currentTeacher: TeacherDisplayType) => {
+        router.push(`/dashboard/${role}/teachers/${currentTeacher.id}/edit`);
+    }, [role, router]);
 
     // A helper function to display action body
     const actionBody = useCallback(
-        (row: any) => (
+        (row: TeacherDisplayType) => (
             <Button
                 icon="pi pi-ellipsis-v"
                 className="p-button-text hover:bg-transparent hover:border-none hover:shadow-none"
@@ -172,7 +168,7 @@ const Teachers: React.FC<TeachersProps> = ({
     );
 
     // A helper function to display context menu
-    const getOverlayActions = useCallback((currentTeacher: any) => {
+    const getOverlayActions = useCallback((currentTeacher: TeacherDisplayType) => {
         return [
             {
                 label: "View",
@@ -190,10 +186,10 @@ const Teachers: React.FC<TeachersProps> = ({
                 action: () => currentTeacher && deleteOne(currentTeacher.id)
             },
         ];
-    }, [role, deleteOne, handleEdit, handleView]);
+    }, [deleteOne, handleEdit, handleView]);
 
-    // Loading effect
-    if (loading) {
+    // Loading effect for initial load
+    if (isLoading && !teachers.length) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
@@ -206,8 +202,8 @@ const Teachers: React.FC<TeachersProps> = ({
     return (
         <section className="flex flex-col w-full py-3 px-4">
             <Toast ref={toast} />
-            {(deletingIds.length > 0 || updatingIds.length > 0) && (
-                <Spinner visible onHide={() => { setDeletingIds([]); setUpdatingIds([]); }} />
+            {isDeleting && (
+                <Spinner visible onHide={() => deleteMutation.reset()} />
             )}
             <div className="bg-white rounded-md shadow-md space-y-4">
                 {/* Page header */}
@@ -264,7 +260,7 @@ const Teachers: React.FC<TeachersProps> = ({
                         dataKey="id"
                         selection={selected}
                         onSelectionChange={e => setSelected(e.value)}
-                        loading={loading}
+                        loading={isLoading || isFetching}
                         emptyMessage="No teachers found."
                         selectionMode="multiple"
                     >
@@ -273,7 +269,7 @@ const Teachers: React.FC<TeachersProps> = ({
                         <Column
                             field="fullname"
                             header="Name"
-                            body={(rowData) => rowData?.fullname || `${rowData?.firstname || ''} ${rowData?.surname || ''}`.trim() || '–'}
+                            body={(rowData: TeacherDisplayType) => rowData?.fullname || `${rowData?.firstname || ''} ${rowData?.surname || ''}`.trim() || '–'}
                             sortable
                             filter
                             filterMatchMode={FilterMatchMode.CONTAINS}
@@ -282,7 +278,7 @@ const Teachers: React.FC<TeachersProps> = ({
                         <Column field="emailAddress" header="Email" sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
                         <Column field="phoneNumber" header="Phone" sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
                         <Column field="genderText" header="Gender" sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
-                        <Column field="qualificationText" header="Qualification" body={(rowData) => rowData?.qualificationText || '–'} sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
+                        <Column field="qualificationText" header="Qualification" body={(rowData: TeacherDisplayType) => rowData?.qualificationText || '–'} sortable filter filterMatchMode={FilterMatchMode.CONTAINS} />
 
                         {permit && (
                             <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
@@ -290,15 +286,15 @@ const Teachers: React.FC<TeachersProps> = ({
                     </DataTable>
                 </div>
             </div>
-            {selected.length > 0 && (
+            {selected.length > 0 && permit && (
                 <div className="mt-4">
                     <Button
                         label={`Delete ${selected.length} teacher(s)`}
                         icon="pi pi-trash"
                         className="p-button-danger"
                         onClick={() => confirmDelete(selected.map(s => s.id))}
-                        loading={deletingIds.length > 0}
-                        disabled={deletingIds.length > 0 || updatingIds.length > 0}
+                        loading={isDeleting}
+                        disabled={isDeleting}
                     />
                 </div>
             )}
@@ -310,7 +306,7 @@ const Teachers: React.FC<TeachersProps> = ({
                             key={label}
                             className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
                             onClick={action}
-                            disabled={current && updatingIds.includes(current.id)}
+                            disabled={current && deletingIds.includes(current.id)}
                         >
                             {icon}
                             <span className="ml-2">{label}</span>

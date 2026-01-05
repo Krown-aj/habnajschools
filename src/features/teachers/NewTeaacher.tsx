@@ -15,14 +15,15 @@ import { teacherSchema, TeacherSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
 import Uploader from "@/components/Uploader/Uploader";
 
-// Define option interface
+import { useCreateTeacher } from "@/hooks/useTeachers";
+import { Teacher as TeacherType } from "@/generated/prisma";
+
 interface Option {
     label: string;
     value: string;
 }
 
-// Define title options for dropdown
-const titleOptions = [
+const titleOptions: Option[] = [
     { label: "Mr.", value: "Mr." },
     { label: "Mrs.", value: "Mrs." },
     { label: "Miss.", value: "Miss." },
@@ -31,14 +32,12 @@ const titleOptions = [
     { label: "Engr.", value: "Engr." },
 ];
 
-// Define gender options for dropdown
-const genderOptions = [
+const genderOptions: Option[] = [
     { label: "Male", value: "MALE" },
     { label: "Female", value: "FEMALE" },
 ];
 
-// Define qualification options for dropdown
-const qualificationOptions = [
+const qualificationOptions: Option[] = [
     { label: "NCE", value: "NCE" },
     { label: "OND/ND", value: "OND/ND" },
     { label: "HND", value: "HND" },
@@ -49,16 +48,14 @@ const qualificationOptions = [
     { label: "PhD.", value: "PhD." },
 ];
 
-// Define section options for dropdown
-const sectionOptions = [
+const sectionOptions: Option[] = [
     { label: "Pre-Nursery", value: "PRE-NURSERY" },
     { label: "Nursery", value: "NURSERY" },
     { label: "Primary", value: "PRIMARY" },
     { label: "Secondary", value: "SECONDARY" },
 ];
 
-// Define blood group options for dropdown
-const bloodgroupOptions = [
+const bloodgroupOptions: Option[] = [
     { label: "A+", value: "A+" },
     { label: "A-", value: "A-" },
     { label: "B+", value: "B+" },
@@ -71,13 +68,15 @@ const bloodgroupOptions = [
 
 const NewTeacher: React.FC = () => {
     const router = useRouter();
-    const toast = useRef<Toast>(null);
-    const [saving, setSaving] = useState(false);
+    const toast = useRef<Toast | null>(null);
+
+    // react-query create teacher mutation
+    const createTeacherMutation = useCreateTeacher();
+
     const [loading, setLoading] = useState(false);
     const [states, setStates] = useState<Option[]>([]);
     const [lgas, setLgas] = useState<Option[]>([]);
     const [uploaded, setUploaded] = useState<{ path: string; id: string; url?: string | null } | null>(null);
-
 
     const {
         register,
@@ -102,13 +101,14 @@ const NewTeacher: React.FC = () => {
             state: "",
             lga: "",
             address: "",
+            qualification: "",
+            section: "",
         },
     });
 
-    // Watch state changes
     const selectedState = watch("state");
 
-    // Fetch states on component mount
+    // Fetch states on mount
     useEffect(() => {
         const controller = new AbortController();
         let mounted = true;
@@ -130,7 +130,7 @@ const NewTeacher: React.FC = () => {
             } catch (err: any) {
                 if (err?.name === "AbortError") return;
                 console.error("Unexpected fetch error:", err);
-                toast?.current?.show({
+                toast?.current?.show?.({
                     severity: "error",
                     summary: "Error",
                     detail: "Could not load Nigerian states.",
@@ -142,14 +142,13 @@ const NewTeacher: React.FC = () => {
         };
 
         fetchStates();
-
         return () => {
             mounted = false;
             controller.abort();
         };
     }, []);
 
-    // Fetch LGAs based on selected state
+    // Fetch LGAs when selected State changes
     useEffect(() => {
         const controller = new AbortController();
         let mounted = true;
@@ -161,9 +160,10 @@ const NewTeacher: React.FC = () => {
             }
             if (mounted) setLoading(true);
             try {
-                const res = await fetch(`https://nga-states-lga.onrender.com/?state=${encodeURIComponent(selectedState)}`, {
-                    signal: controller.signal,
-                });
+                const res = await fetch(
+                    `https://nga-states-lga.onrender.com/?state=${encodeURIComponent(selectedState)}`,
+                    { signal: controller.signal }
+                );
                 if (!res.ok) throw new Error(`Failed to fetch LGAs (status ${res.status})`);
                 const data = await res.json();
 
@@ -175,7 +175,7 @@ const NewTeacher: React.FC = () => {
             } catch (err: any) {
                 if (err?.name === "AbortError") return;
                 console.error("Unexpected fetch error:", err);
-                toast?.current?.show({
+                toast.current?.show({
                     severity: "error",
                     summary: "Error",
                     detail: "Could not load LGAs for the selected state.",
@@ -188,64 +188,58 @@ const NewTeacher: React.FC = () => {
         };
 
         fetchLgas();
-
         return () => {
             mounted = false;
             controller.abort();
         };
     }, [selectedState]);
 
-    // A helper function to handle toast display
-    const show = (
-        severity: "success" | "error",
-        summary: string,
-        detail: string
-    ) => {
+    const show = (severity: "success" | "error", summary: string, detail: string) => {
         toast.current?.show({ severity, summary, detail, life: 3000 });
     };
 
-    // A helper function to handle back navigation
-    const handleBack = () => {
-        router.back();
-    };
+    const handleBack = () => router.back();
 
-    // A function to submit data to API for saving
-    const onSubmit = async (data: TeacherSchema) => {
-        setSaving(true);
-        try {
-            const payload = {
-                ...data,
-                password: 'password',
-                avarta: uploaded ? uploaded.path : null,
-            };
-            const res = await fetch("/api/teachers", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-            const result = await res.json();
-            if (res.ok) {
+    // submit handler
+    const onSubmit = (data: TeacherSchema) => {
+        // Normalize birthday to Date | null
+        const normalizedBirthday: Date | null =
+            data.birthday === undefined || data.birthday === null
+                ? null
+                : typeof data.birthday === "string"
+                    ? new Date(data.birthday)
+                    : data.birthday instanceof Date
+                        ? data.birthday
+                        : null;
+
+        const payload: Partial<TeacherType & { password?: string }> = {
+            ...data,
+            birthday: normalizedBirthday,
+            password: "password",
+            avarta: uploaded?.path ?? null,
+        };
+
+        createTeacherMutation.mutate(payload, {
+            onSuccess: (_created: any) => {
                 show("success", "Teacher Created", "New teacher has been created successfully.");
-                setTimeout(() => {
-                    reset();
-                    router.back();
-                }, 1500);
-            } else {
-                show("error", "Creation Error", result.error || result.message || "Failed to create new teacher record, please try again.");
-            }
-        } catch (err: any) {
-            show("error", "Creation Error", err.message || "Could not create new teacher record.");
-        } finally {
-            setSaving(false);
-        }
+                reset();
+                setTimeout(() => router.back(), 900);
+            },
+            onError: (err: any) => {
+                show("error", "Creation Error", err?.message || "Failed to create new teacher record, please try again.");
+            },
+        });
     };
 
-    // Loading effect during fetching
-    if (loading) {
+    const isSaving = Boolean((createTeacherMutation as any).isLoading || (createTeacherMutation as any).isPending);
+
+    const globalLoading = loading;
+
+    if (globalLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4" />
                 </div>
             </div>
         );
@@ -254,7 +248,7 @@ const NewTeacher: React.FC = () => {
     return (
         <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
-            {saving && <Spinner visible onHide={() => setSaving(false)} />}
+            {isSaving && <Spinner visible onHide={() => { /* noop */ }} />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900/80 p-4">Create New Teacher</h2>
                 <Button
@@ -264,6 +258,7 @@ const NewTeacher: React.FC = () => {
                     onClick={handleBack}
                 />
             </div>
+
             <div className="space-y-4 p-4">
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
                     <div className="p-field">
@@ -273,7 +268,7 @@ const NewTeacher: React.FC = () => {
                             dropboxFolder="/habnajschools"
                         />
                     </div>
-                    {/* Title and qualification field */}
+
                     <div className="p-field grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="title">Title</label>
@@ -292,6 +287,7 @@ const NewTeacher: React.FC = () => {
                             />
                             {errors.title && <small className="p-error">{errors.title.message}</small>}
                         </div>
+
                         <div>
                             <label htmlFor="qualification">Qualification</label>
                             <Controller
@@ -314,20 +310,13 @@ const NewTeacher: React.FC = () => {
                     <div className="p-field grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="firstname">First Name</label>
-                            <InputText
-                                id="firstname"
-                                {...register("firstname")}
-                                className={errors.firstname ? "p-invalid w-full" : "w-full"}
-                            />
+                            <InputText id="firstname" {...register("firstname")} className={errors.firstname ? "p-invalid w-full" : "w-full"} />
                             {errors.firstname && <small className="p-error">{errors.firstname.message}</small>}
                         </div>
+
                         <div>
                             <label htmlFor="othername">Other Name</label>
-                            <InputText
-                                id="othername"
-                                {...register("othername")}
-                                className={errors.othername ? "p-invalid w-full" : "w-full"}
-                            />
+                            <InputText id="othername" {...register("othername")} className={errors.othername ? "p-invalid w-full" : "w-full"} />
                             {errors.othername && <small className="p-error">{errors.othername.message}</small>}
                         </div>
                     </div>
@@ -335,13 +324,10 @@ const NewTeacher: React.FC = () => {
                     <div className="p-field grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="surname">Surname</label>
-                            <InputText
-                                id="surname"
-                                {...register("surname")}
-                                className={errors.surname ? "p-invalid w-full" : "w-full"}
-                            />
+                            <InputText id="surname" {...register("surname")} className={errors.surname ? "p-invalid w-full" : "w-full"} />
                             {errors.surname && <small className="p-error">{errors.surname.message}</small>}
                         </div>
+
                         <div>
                             <label htmlFor="section">Section</label>
                             <Controller
@@ -359,7 +345,6 @@ const NewTeacher: React.FC = () => {
                             />
                             {errors.section && <small className="p-error">{errors.section.message}</small>}
                         </div>
-
                     </div>
 
                     <div className="p-field grid grid-cols-2 gap-4">
@@ -371,7 +356,13 @@ const NewTeacher: React.FC = () => {
                                 render={({ field }) => (
                                     <Calendar
                                         id="birthday"
-                                        value={field.value instanceof Date || field.value === undefined ? field.value : field.value ? new Date(field.value) : null}
+                                        value={
+                                            field.value instanceof Date || field.value === undefined || field.value === null
+                                                ? (field.value as Date | null | undefined)
+                                                : field.value
+                                                    ? new Date(field.value as any)
+                                                    : null
+                                        }
                                         onChange={(e) => field.onChange(e.value)}
                                         onBlur={field.onBlur}
                                         dateFormat="dd/mm/yy"
@@ -382,19 +373,14 @@ const NewTeacher: React.FC = () => {
                             />
                             {errors.birthday && <small className="p-error">{errors.birthday.message}</small>}
                         </div>
+
                         <div>
                             <label htmlFor="gender">Gender</label>
                             <Controller
                                 name="gender"
                                 control={control}
                                 render={({ field }) => (
-                                    <Dropdown
-                                        id="gender"
-                                        {...field}
-                                        options={genderOptions}
-                                        placeholder="Select Gender"
-                                        className={errors.gender ? "p-invalid w-full" : "w-full"}
-                                    />
+                                    <Dropdown id="gender" {...field} options={genderOptions} placeholder="Select Gender" className={errors.gender ? "p-invalid w-full" : "w-full"} />
                                 )}
                             />
                             {errors.gender && <small className="p-error">{errors.gender.message}</small>}
@@ -408,25 +394,15 @@ const NewTeacher: React.FC = () => {
                                 name="bloodgroup"
                                 control={control}
                                 render={({ field }) => (
-                                    <Dropdown
-                                        id="bloodgroup"
-                                        {...field}
-                                        options={bloodgroupOptions}
-                                        placeholder="Select Blood Group"
-                                        className={errors.bloodgroup ? "p-invalid w-full" : "w-full"}
-                                    />
+                                    <Dropdown id="bloodgroup" {...field} options={bloodgroupOptions} placeholder="Select Blood Group" className={errors.bloodgroup ? "p-invalid w-full" : "w-full"} />
                                 )}
                             />
                             {errors.bloodgroup && <small className="p-error">{errors.bloodgroup.message}</small>}
                         </div>
+
                         <div>
                             <label htmlFor="email">Email</label>
-                            <InputText
-                                id="email"
-                                type="email"
-                                {...register("email")}
-                                className={errors.email ? "p-invalid w-full" : "w-full"}
-                            />
+                            <InputText id="email" type="email" {...register("email")} className={errors.email ? "p-invalid w-full" : "w-full"} />
                             {errors.email && <small className="p-error">{errors.email.message}</small>}
                         </div>
                     </div>
@@ -434,26 +410,17 @@ const NewTeacher: React.FC = () => {
                     <div className="p-field grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="phone">Phone</label>
-                            <InputText
-                                id="phone"
-                                {...register("phone")}
-                                className={errors.phone ? "p-invalid w-full" : "w-full"}
-                            />
+                            <InputText id="phone" {...register("phone")} className={errors.phone ? "p-invalid w-full" : "w-full"} />
                             {errors.phone && <small className="p-error">{errors.phone.message}</small>}
                         </div>
+
                         <div>
                             <label htmlFor="state">State</label>
                             <Controller
                                 name="state"
                                 control={control}
                                 render={({ field }) => (
-                                    <Dropdown
-                                        id="state"
-                                        {...field}
-                                        options={states}
-                                        placeholder="Select State"
-                                        className={errors.state ? "p-invalid w-full" : "w-full"}
-                                    />
+                                    <Dropdown id="state" {...field} options={states} placeholder="Select State" className={errors.state ? "p-invalid w-full" : "w-full"} />
                                 )}
                             />
                             {errors.state && <small className="p-error">{errors.state.message}</small>}
@@ -479,33 +446,17 @@ const NewTeacher: React.FC = () => {
                             />
                             {errors.lga && <small className="p-error">{errors.lga.message}</small>}
                         </div>
+
                         <div>
                             <label htmlFor="address">Address</label>
-                            <InputTextarea
-                                rows={3}
-                                id="address"
-                                {...register("address")}
-                                className={errors.address ? "p-invalid w-full" : "w-full"}
-                            />
+                            <InputTextarea rows={3} id="address" {...register("address")} className={errors.address ? "p-invalid w-full" : "w-full"} />
                             {errors.address && <small className="p-error">{errors.address.message}</small>}
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
-                        <Button
-                            label="Cancel"
-                            type="button"
-                            outlined
-                            onClick={handleBack}
-                        />
-                        <Button
-                            label="Save"
-                            type="submit"
-                            className="p-button-primary"
-                            loading={saving}
-                            disabled={saving}
-                        />
+                        <Button label="Cancel" type="button" outlined onClick={handleBack} />
+                        <Button label="Save" type="submit" className="p-button-primary" loading={isSaving} disabled={isSaving} />
                     </div>
                 </form>
             </div>

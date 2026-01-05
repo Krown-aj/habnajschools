@@ -7,23 +7,38 @@ import bcrypt from 'bcryptjs';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
-        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.PARENT]);
+        // Ensure the requester is authenticated
+        const validation = await validateSession();
         if (validation.error) return validation.error;
 
-        const { userRole, session } = validation;
-        const where: Prisma.TeacherWhereInput = {};
+        const url = new URL(request.url);
+        const teacherParam = url.searchParams.get('teacherid');
+        const sectionParam = url.searchParams.get('section');
+        const parentParam = url.searchParams.get('parentid');
 
-        // Restrict access based on user role
-        if (userRole === UserRole.TEACHER) {
-            // Teachers can only see their own data
-            where.id = session!.user.id;
-        } else if (userRole === UserRole.PARENT) {
-            // Parents see teachers associated with their children's classes
-            where.OR = [
-                { classes: { some: { students: { some: { parentid: session!.user.id } } } } },
-                { lessons: { some: { class: { students: { some: { parentid: session!.user.id } } } } } }
-            ];
+        const whereClauses: Prisma.TeacherWhereInput[] = [];
+
+        // Filter by specific teacher id
+        if (teacherParam) {
+            whereClauses.push({ id: teacherParam });
         }
+
+        // Filter by section
+        if (sectionParam) {
+            whereClauses.push({ section: sectionParam.toLocaleUpperCase() });
+        }
+
+        // Filter by parentid -> teachers associated with parent's children
+        if (parentParam) {
+            whereClauses.push({
+                OR: [
+                    { classes: { some: { students: { some: { parentid: parentParam } } } } },
+                    { lessons: { some: { class: { students: { some: { parentid: parentParam } } } } } },
+                ],
+            });
+        }
+
+        const where: Prisma.TeacherWhereInput = whereClauses.length ? { AND: whereClauses } : {};
 
         const teachers: any[] = await prisma.teacher.findMany({
             where,
@@ -32,6 +47,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 title: true,
                 firstname: true,
                 surname: true,
+                othername: true,
                 email: true,
                 phone: true,
                 gender: true,
@@ -42,13 +58,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                     select: {
                         id: true,
                         name: true,
-                    }
+                    },
                 },
                 classes: {
                     select: {
                         id: true,
                         name: true,
-                    }
+                    },
                 },
                 lessons: {
                     select: {
@@ -57,7 +73,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                         day: true,
                         startTime: true,
                         endTime: true,
-                    }
+                    },
                 },
                 notifications: true,
                 createdAt: true,
@@ -68,11 +84,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                         classes: true,
                         lessons: true,
                         assignments: true,
-                        tests: true
-                    }
-                }
+                        tests: true,
+                    },
+                },
             },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
         });
 
         return successResponse({ data: teachers });

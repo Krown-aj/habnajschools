@@ -8,6 +8,7 @@ import { Badge } from "primereact/badge";
 import { Button } from "primereact/button";
 import { TabView, TabPanel } from "primereact/tabview";
 import moment from "moment";
+import { useGetGradingPolicyById } from "@/hooks/useGradingPolicies";
 
 type GradingPolicyProps = {
     title?: string;
@@ -19,55 +20,37 @@ type GradingPolicyProps = {
 const GradingPolicy: React.FC<GradingPolicyProps> = () => {
     const router = useRouter();
     const params = useParams();
-    const [policyData, setPolicyData] = useState<any>(null);
     const toast = useRef<Toast>(null);
-    const [loading, setLoading] = useState(false);
-    const policyId = params.id;
 
     // Tab control
     const [activeIndex, setActiveIndex] = useState<number>(0);
 
-    // Fetch grading policy data when component mounts
-    useEffect(() => {
-        const fetchPolicyData = async () => {
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/policies/${policyId}`, {
-                    method: "GET",
-                    headers: { "Content-Type": "application/json" },
-                });
-                const result = await res.json();
-                if (res.ok) {
-                    // API returns { data: policy } in some places — support both shapes
-                    setPolicyData(result.data || result);
-                } else {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Fetch Error",
-                        detail: result.error || "Could not fetch grading policy data.",
-                    });
-                }
-            } catch (err: any) {
-                toast.current?.show({
-                    severity: "error",
-                    summary: "Fetch Error",
-                    detail: err.message || "Failed to fetch grading policy data.",
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
+    const policyId = typeof params?.id === "string" ? params.id : undefined;
 
-        if (policyId) {
-            fetchPolicyData();
+    // Use React Query hook for fetching single policy by id
+    const {
+        data: policyData,
+        isLoading,
+        isFetching,
+        error,
+    } = useGetGradingPolicyById(policyId, { enabled: Boolean(policyId) });
+
+    // show error toast if fetch failed
+    useEffect(() => {
+        if (error) {
+            const message = (error as any)?.message || "Could not fetch grading policy data.";
+            toast.current?.show({ severity: "error", summary: "Fetch Error", detail: message, life: 4000 });
         }
-    }, [policyId]);
+    }, [error]);
 
     const handleBack = () => {
         router.back();
     };
 
-    if (loading) {
+    // Combined loading state
+    const loading = isLoading || isFetching;
+
+    if (loading && !policyData) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
@@ -132,13 +115,15 @@ const GradingPolicy: React.FC<GradingPolicyProps> = () => {
                         <TabView activeIndex={activeIndex} onTabChange={(e) => setActiveIndex(e.index)}>
                             <TabPanel header="Policy Info">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
                                     <div>
                                         <dl className="text-xs sm:text-sm text-gray-600 space-y-2 sm:space-y-4">
                                             <div>
                                                 <h3 className="text-sm font-bold text-gray-700 mb-2">Overview</h3>
-                                                <p className="text-xs sm:text-sm text-gray-600">{policyData?.description || "No description available."}</p>
+                                                <p className="text-xs sm:text-sm text-gray-600">
+                                                    {policyData?.description || "No description available."}
+                                                </p>
                                             </div>
+
                                             <div>
                                                 <dt className="font-semibold">Title</dt>
                                                 <dd>{policyData?.title || "–"}</dd>
@@ -156,7 +141,6 @@ const GradingPolicy: React.FC<GradingPolicyProps> = () => {
                                         </dl>
                                     </div>
 
-
                                     <div>
                                         <dl className="text-xs sm:text-sm text-gray-600 space-y-2 sm:space-y-4">
                                             <div>
@@ -172,14 +156,20 @@ const GradingPolicy: React.FC<GradingPolicyProps> = () => {
                                             <div>
                                                 <dt className="font-semibold">Total Assessments</dt>
                                                 <dd>
-                                                    <Badge value={policyData?._count?.assessments ?? (policyData?.assessments?.length ?? 0)} severity="info" />
+                                                    <Badge
+                                                        value={policyData?._count?.assessments ?? (policyData?.assessments?.length ?? 0)}
+                                                        severity="info"
+                                                    />
                                                 </dd>
                                             </div>
 
                                             <div>
                                                 <dt className="font-semibold">Total Traits</dt>
                                                 <dd>
-                                                    <Badge value={policyData?._count?.traits ?? (policyData?.traits?.length ?? 0)} severity="info" />
+                                                    <Badge
+                                                        value={policyData?._count?.traits ?? (policyData?.traits?.length ?? 0)}
+                                                        severity="info"
+                                                    />
                                                 </dd>
                                             </div>
 
@@ -200,16 +190,24 @@ const GradingPolicy: React.FC<GradingPolicyProps> = () => {
                                         <table className="w-full min-w-[500px] text-xs sm:text-sm text-left text-gray-600">
                                             <thead className="text-xs sm:text-sm text-gray-700 uppercase bg-gray-50">
                                                 <tr>
-                                                    <th scope="col" className="px-2 sm:px-4 py-3">Name</th>
-                                                    <th scope="col" className="px-2 sm:px-4 py-3">Weight (%)</th>
-                                                    <th scope="col" className="px-2 sm:px-4 py-3">Max Score</th>
+                                                    <th scope="col" className="px-2 sm:px-4 py-3">
+                                                        Name
+                                                    </th>
+                                                    <th scope="col" className="px-2 sm:px-4 py-3">
+                                                        Weight (%)
+                                                    </th>
+                                                    <th scope="col" className="px-2 sm:px-4 py-3">
+                                                        Max Score
+                                                    </th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {policyData.assessments.map((assessment: any) => (
                                                     <tr key={assessment.id} className="bg-white border-b border-gray-300 hover:bg-gray-50">
                                                         <td className="px-2 sm:px-4 py-3">{assessment.name || "–"}</td>
-                                                        <td className="px-2 sm:px-4 py-3">{assessment.weight !== undefined ? `${assessment.weight} %` : "–"}</td>
+                                                        <td className="px-2 sm:px-4 py-3">
+                                                            {assessment.weight !== undefined ? `${assessment.weight} %` : "–"}
+                                                        </td>
                                                         <td className="px-2 sm:px-4 py-3">{assessment.maxScore ?? "–"}</td>
                                                     </tr>
                                                 ))}
@@ -227,8 +225,12 @@ const GradingPolicy: React.FC<GradingPolicyProps> = () => {
                                         <table className="w-full min-w-[420px] text-xs sm:text-sm text-left text-gray-600">
                                             <thead className="text-xs sm:text-sm text-gray-700 uppercase bg-gray-50">
                                                 <tr>
-                                                    <th scope="col" className="px-2 sm:px-4 py-3">Name</th>
-                                                    <th scope="col" className="px-2 sm:px-4 py-3">Category</th>
+                                                    <th scope="col" className="px-2 sm:px-4 py-3">
+                                                        Name
+                                                    </th>
+                                                    <th scope="col" className="px-2 sm:px-4 py-3">
+                                                        Category
+                                                    </th>
                                                 </tr>
                                             </thead>
                                             <tbody>

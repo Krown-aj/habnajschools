@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,11 +11,11 @@ import { Toast } from "primereact/toast";
 import { InputNumber } from "primereact/inputnumber";
 import { Dropdown } from "primereact/dropdown";
 
-import { gradingPolicyUpdateSchema, GradingPolicyUpdateSchema } from "@/lib/schemas/index";
+import { gradingPolicyUpdateSchema, type GradingPolicyUpdateSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
+import { useGetGradingPolicyById, useUpdateGradingPolicy, useInvalidateGradingPolicies } from "@/hooks/useGradingPolicies";
 
 const TRAIT_CATEGORIES = [
-    // Replace with your actual TraitCategory values if different
     { label: "Behavioural", value: "BEHAVIOURAL" },
     { label: "Affective", value: "AFFECTIVE" },
     { label: "Psychomotor", value: "PSYCHOMOTOR" },
@@ -26,9 +26,8 @@ const EditGradingPolicy: React.FC = () => {
     const router = useRouter();
     const params = useParams();
     const toast = useRef<Toast>(null);
-    const [saving, setSaving] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const policyId = params.id;
+
+    const policyId = typeof params?.id === "string" ? params.id : undefined;
 
     const {
         register,
@@ -57,163 +56,92 @@ const EditGradingPolicy: React.FC = () => {
         append: appendAssessment,
         remove: removeAssessment,
         update: updateAssessment,
-    } = useFieldArray({
-        control,
-        name: "assessments",
-    });
+    } = useFieldArray({ control, name: "assessments" });
 
     const {
         fields: traitFields,
         append: appendTrait,
         remove: removeTrait,
         update: updateTrait,
-    } = useFieldArray({
-        control,
-        name: "traits",
-    });
+    } = useFieldArray({ control, name: "traits" });
 
-    // Fetch grading policy data on component mount
+    // React Query hooks
+    const { data: policyData, isLoading: queryLoading, error: queryError } = useGetGradingPolicyById(
+        policyId,
+        { enabled: Boolean(policyId) }
+    );
+    const updateMutation = useUpdateGradingPolicy();
+    const invalidate = useInvalidateGradingPolicies();
+
+    // Map query errors to toast
     useEffect(() => {
-        const controller = new AbortController();
-        let mounted = true;
-
-        const fetchData = async () => {
-            if (mounted) setLoading(true);
-            try {
-                if (!policyId) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Invalid Policy",
-                        detail: "Grading Policy ID is missing.",
-                        life: 3000,
-                    });
-                    return;
-                }
-
-                const response = await fetch(`/api/policies/${policyId}`, {
-                    signal: controller.signal,
-                });
-
-                if (!response.ok) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Fetching Error",
-                        detail: "Failed to load grading policy data.",
-                        life: 3000,
-                    });
-                    return;
-                }
-
-                const policyPayload = await response.json();
-                if (!policyPayload) {
-                    toast.current?.show({
-                        severity: "error",
-                        summary: "Parsing Error",
-                        detail: "Grading policy response format invalid.",
-                        life: 3000,
-                    });
-                    return;
-                }
-
-                const policyData = policyPayload.data || policyPayload;
-
-                // set basic fields
-                setValue("title", policyData.title || "");
-                setValue("description", policyData.description || "");
-                setValue("passMark", policyData.passMark ?? undefined);
-                setValue("maxScore", policyData.maxScore ?? undefined);
-
-                // set assessments
-                setValue(
-                    "assessments",
-                    policyData.assessments?.map((assessment: any) => ({
-                        id: assessment.id,
-                        name: assessment.name,
-                        weight: assessment.weight,
-                        maxScore: assessment.maxScore,
-                    })) || []
-                );
-
-                // set traits
-                setValue(
-                    "traits",
-                    policyData.traits?.map((trait: any) => ({
-                        id: trait.id,
-                        name: trait.name,
-                        category: trait.category ?? "",
-                    })) || []
-                );
-            } catch (err: any) {
-                if (err?.name === "AbortError") return;
-                console.error("Unexpected fetch error:", err);
-                toast.current?.show({
-                    severity: "error",
-                    summary: "Error",
-                    detail: "An unexpected error occurred while loading data.",
-                    life: 3000,
-                });
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        if (policyId) {
-            fetchData();
+        if (queryError) {
+            const message = (queryError as any)?.message || "Failed to load grading policy.";
+            toast.current?.show({ severity: "error", summary: "Fetching Error", detail: message, life: 4000 });
         }
+    }, [queryError]);
 
-        return () => {
-            mounted = false;
-            controller.abort();
-        };
-    }, [policyId, setValue]);
+    // Populate form when policyData arrives
+    useEffect(() => {
+        if (!policyData) return;
 
-    // A helper function to handle toast display
-    const show = (
-        severity: "success" | "error",
-        summary: string,
-        detail: string
-    ) => {
+        setValue("title", policyData.title ?? "");
+        setValue("description", policyData.description ?? "");
+        setValue("passMark", policyData.passMark ?? undefined);
+        setValue("maxScore", policyData.maxScore ?? undefined);
+
+        setValue(
+            "assessments",
+            (policyData.assessments || []).map((a: any) => ({
+                id: a.id,
+                name: a.name,
+                weight: a.weight,
+                maxScore: a.maxScore,
+            }))
+        );
+
+        setValue(
+            "traits",
+            (policyData.traits || []).map((t: any) => ({
+                id: t.id,
+                name: t.name,
+                category: t.category ?? "",
+            }))
+        );
+
+        // ensure delete arrays are empty initially
+        setValue("deleteAssessments", []);
+        setValue("deleteTraits", []);
+    }, [policyData, setValue]);
+
+    // show helper
+    const show = (severity: "success" | "error", summary: string, detail: string) => {
         toast.current?.show({ severity, summary, detail, life: 3000 });
     };
 
-    // A helper function to handle back navigation
-    const handleBack = () => {
-        router.back();
-    };
+    const handleBack = () => router.back();
 
-    // A function to submit data to API for updating
+    // Submit handler
     const onSubmit = async (data: GradingPolicyUpdateSchema) => {
-        setSaving(true);
-        try {
-            if (!policyId) {
-                show("error", "Invalid Policy", "Grading Policy ID is missing.");
-                setSaving(false);
-                return;
-            }
+        if (!policyId) {
+            show("error", "Invalid Policy", "Grading Policy ID is missing.");
+            return;
+        }
 
-            const payload = { ...data };
-            const res = await fetch(`/api/policies/${policyId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-            const result = await res.json();
-            if (res.ok) {
-                show("success", "Grading Policy Updated", "Grading policy has been updated successfully.");
-                setTimeout(() => {
-                    router.back();
-                }, 1500);
-            } else {
-                show("error", "Update Error", result.error || result.message || "Failed to update grading policy, please try again.");
-            }
+        try {
+            await updateMutation.mutateAsync({ id: policyId, data });
+            show("success", "Grading Policy Updated", "Grading policy has been updated successfully.");
+            invalidate();
+            router.back();
         } catch (err: any) {
-            show("error", "Update Error", err.message || "Could not update grading policy.");
-        } finally {
-            setSaving(false);
+            const message = (err && (err.message || (err as any).response?.data?.message)) || "Failed to update grading policy.";
+            show("error", "Update Error", message);
         }
     };
 
-    // Loading effect during fetching
+    const saving = updateMutation.isPending;
+    const loading = queryLoading;
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -227,7 +155,7 @@ const EditGradingPolicy: React.FC = () => {
     return (
         <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
-            {saving && <Spinner visible onHide={() => setSaving(false)} />}
+            {saving && <Spinner visible onHide={() => { }} />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900/80 p-4">Edit Grading Policy</h2>
                 <Button
@@ -237,15 +165,12 @@ const EditGradingPolicy: React.FC = () => {
                     onClick={handleBack}
                 />
             </div>
+
             <div className="space-y-4 p-4">
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
                     <div className="p-field">
                         <label htmlFor="title">Title</label>
-                        <InputText
-                            id="title"
-                            {...register("title")}
-                            className={errors.title ? "p-invalid w-full" : "w-full"}
-                        />
+                        <InputText id="title" {...register("title")} className={errors.title ? "p-invalid w-full" : "w-full"} />
                         {errors.title && <small className="p-error">{errors.title.message}</small>}
                     </div>
 
@@ -279,6 +204,7 @@ const EditGradingPolicy: React.FC = () => {
                             />
                             {errors.passMark && <small className="p-error">{errors.passMark.message}</small>}
                         </div>
+
                         <div>
                             <label htmlFor="maxScore">Max Score</label>
                             <Controller
@@ -316,6 +242,7 @@ const EditGradingPolicy: React.FC = () => {
                                             <small className="p-error">{(errors.assessments[index] as any).name?.message}</small>
                                         )}
                                     </div>
+
                                     <div>
                                         <label htmlFor={`assessments.${index}.weight`}>Weight (%)</label>
                                         <Controller
@@ -336,6 +263,7 @@ const EditGradingPolicy: React.FC = () => {
                                             <small className="p-error">{(errors.assessments[index] as any).weight?.message}</small>
                                         )}
                                     </div>
+
                                     <div>
                                         <label htmlFor={`assessments.${index}.maxScore`}>Max Score</label>
                                         <Controller
@@ -357,14 +285,16 @@ const EditGradingPolicy: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
+
                                 <Button
                                     label="Remove"
                                     type="button"
                                     className="p-button-danger p-button-sm mt-2"
                                     onClick={() => {
                                         const currentDelete = watch("deleteAssessments") || [];
-                                        if ((field as any).id) {
-                                            setValue("deleteAssessments", [...currentDelete, (field as any).id]);
+                                        const id = (field as any).id;
+                                        if (id) {
+                                            setValue("deleteAssessments", [...currentDelete, id]);
                                         }
                                         removeAssessment(index);
                                     }}
@@ -372,6 +302,7 @@ const EditGradingPolicy: React.FC = () => {
                                 />
                             </div>
                         ))}
+
                         <Button
                             label="Add Assessment"
                             type="button"
@@ -428,8 +359,9 @@ const EditGradingPolicy: React.FC = () => {
                                     className="p-button-danger p-button-sm mt-2"
                                     onClick={() => {
                                         const currentDelete = watch("deleteTraits") || [];
-                                        if ((field as any).id) {
-                                            setValue("deleteTraits", [...currentDelete, (field as any).id]);
+                                        const id = (field as any).id;
+                                        if (id) {
+                                            setValue("deleteTraits", [...currentDelete, id]);
                                         }
                                         removeTrait(index);
                                     }}
@@ -437,29 +369,19 @@ const EditGradingPolicy: React.FC = () => {
                                 />
                             </div>
                         ))}
+
                         <Button
                             label="Add Trait"
                             type="button"
                             className="p-button-secondary p-button-sm"
-                            onClick={() => appendTrait({ name: "", category: 'AFFECTIVE' })}
+                            onClick={() => appendTrait({ name: "", category: "AFFECTIVE" })}
                         />
                     </div>
 
                     {/* Action Buttons */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
-                        <Button
-                            label="Cancel"
-                            type="button"
-                            outlined
-                            onClick={handleBack}
-                        />
-                        <Button
-                            label="Update"
-                            type="submit"
-                            className="p-button-primary"
-                            loading={saving}
-                            disabled={saving}
-                        />
+                        <Button label="Cancel" type="button" outlined onClick={handleBack} />
+                        <Button label="Update" type="submit" className="p-button-primary" loading={saving} disabled={saving} />
                     </div>
                 </form>
             </div>

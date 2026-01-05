@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+"use client";
+
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { FaPlus } from "react-icons/fa";
 import { Trash2, Edit, Eye, Book } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -13,7 +15,10 @@ import { confirmDialog } from "primereact/confirmdialog";
 import { FilterMatchMode } from "primereact/api";
 import { Toast } from "primereact/toast";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Spinner from "@/components/Spinner/Spinner";
+
+import { useGetSubjects, useDeleteSubjects } from "@/hooks/useSubjects";
 
 type SubjectsProps = {
     title?: string;
@@ -28,99 +33,93 @@ const Subjects: React.FC<SubjectsProps> = ({
 }) => {
     const router = useRouter();
     const { data: session } = useSession();
-    const [subjects, setSubjects] = useState<any[]>([]);
+    const qc = useQueryClient();
+
+    const toast = useRef<Toast | null>(null);
+    const panel = useRef<OverlayPanel | null>(null);
+
+    // UI state
     const [selected, setSelected] = useState<any[]>([]);
     const [current, setCurrent] = useState<any | null>(null);
     const [deletingIds, setDeletingIds] = useState<string[]>([]);
     const [updatingIds, setUpdatingIds] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
-    const toast = useRef<Toast>(null);
-    const panel = useRef<OverlayPanel>(null);
 
     const [filters, setFilters] = useState<DataTableFilterMeta>({
         global: { value: null, matchMode: FilterMatchMode.CONTAINS } as DataTableFilterMetaData,
     });
 
-    const role = session?.user?.role || 'Guest';
-    const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin';
+    const role = (session?.user?.role ?? "Guest").toString();
+    const roleLower = role.toLowerCase();
+    const permit = roleLower === "super" || roleLower === "admin";
+    const userId = session?.user?.id as string | undefined;
 
-    // Fetch subjects data on mount
-    useEffect(() => {
-        fetchData();
-    }, []);
+    // Build params depending on role: teacher -> teacherid, parent -> parentid
+    const subjectParams = useMemo(() => {
+        if (roleLower === "teacher" && userId) return { teacherid: userId };
+        if (roleLower === "parent" && userId) return { parentid: userId };
+        return undefined;
+    }, [roleLower, userId]);
 
-    // Toast helper function
-    const show = useCallback((
-        type: "success" | "error" | "info" | "warn" | "secondary" | "contrast" | undefined,
-        title: string,
-        message: string
-    ) => {
-        toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
-    }, []);
+    // Query: subjects
+    const {
+        data: subjectsData,
+        isLoading: isLoadingSubjects,
+        isError: isSubjectsError,
+        error: subjectsError,
+    } = useGetSubjects(subjectParams);
 
-    // Fetch subjects data
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch("/api/subjects");
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            setSubjects(data?.data || []);
-        } catch (err) {
-            show("error", "Fetch Error", "Failed to fetch subjects record, please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Mutation: delete subjects (supports single and multiple)
+    const deleteMutation = useDeleteSubjects();
 
-    // A helper function to make API call to delete records
-    const deleteApi = async (ids: string[]) => {
-        const query = ids.map(id => `ids=${encodeURIComponent(id)}`).join("&");
-        const res = await fetch(`/api/subjects?${query}`, { method: "DELETE" });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `Status ${res.status}`);
-        }
-        return res;
-    };
+    // Toast helper
+    const show = useCallback(
+        (type: "success" | "error" | "info" | "warn" | "secondary" | "contrast" | undefined, title: string, message: string) => {
+            toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
+        },
+        []
+    );
 
-    // Confirm deletion
+    // Derived subjects list (source of truth is React Query cache)
+    const subjects = (subjectsData ?? []) as any[];
+
+    // Handle query error once
+    if (isSubjectsError) {
+        const msg = (subjectsError as any)?.message || "Failed to load subjects.";
+        show("error", "Load Error", msg);
+    }
+
+    // Confirm deletion (uses mutation with optimistic update)
     const confirmDelete = useCallback(
         (ids: string[]) => {
             confirmDialog({
                 message:
-                    ids.length === 1
-                        ? "Do you really want to delete this subject?"
-                        : `Do you really want to delete these ${ids.length} subjects?`,
+                    ids.length === 1 ? "Do you really want to delete this subject?" : `Do you really want to delete these ${ids.length} subjects?`,
                 header: "Confirm Deletion",
                 icon: "pi pi-exclamation-triangle",
                 acceptClassName: "p-button-danger",
                 rejectClassName: "p-button-text",
                 accept: async () => {
                     setDeletingIds(ids);
+
                     try {
-                        await deleteApi(ids);
-                        show(
-                            "success",
-                            "Deleted",
-                            ids.length === 1
-                                ? "Subject deleted successfully."
-                                : `${ids.length} subjects deleted successfully.`
-                        );
-                        setSubjects(prev => prev.filter(s => !ids.includes(s.id)));
-                        setSelected(prev => prev.filter(s => !ids.includes(s.id)));
+                        // Mutate with optimistic updates handled inside hook
+                        await deleteMutation.mutateAsync(ids);
+                        show("success", "Deleted", ids.length === 1 ? "Subject deleted successfully." : `${ids.length} subjects deleted successfully.`);
+
+                        // Clear selection for deleted ids
+                        setSelected((prev) => prev.filter((s) => !ids.includes(s.id)));
                     } catch (err: any) {
-                        show("error", "Deletion Error", err.message || "Failed to delete subject, please try again.");
+                        show("error", "Deletion Error", err?.message || "Failed to delete subject, please try again.");
                     } finally {
                         setDeletingIds([]);
                     }
                 },
             });
         },
-        [show]
+        [deleteMutation, show]
     );
 
-    // Delete single record
+    // Delete single record (from overlay)
     const deleteOne = useCallback(
         (id: string) => {
             confirmDelete([id]);
@@ -131,16 +130,22 @@ const Subjects: React.FC<SubjectsProps> = ({
 
     // Navigation handlers
     const handleNew = useCallback(() => {
-        router.push(`/dashboard/${role}/subjects/new`);
-    }, [role]);
+        router.push(`/dashboard/${roleLower}/subjects/new`);
+    }, [router, roleLower]);
 
-    const handleView = useCallback((currentSubject: any) => {
-        router.push(`/dashboard/${role}/subjects/${currentSubject?.id}/view`);
-    }, [role]);
+    const handleView = useCallback(
+        (currentSubject: any) => {
+            router.push(`/dashboard/${roleLower}/subjects/${currentSubject?.id}/view`);
+        },
+        [router, roleLower]
+    );
 
-    const handleEdit = useCallback((currentSubject: any) => {
-        router.push(`/dashboard/${role}/subjects/${currentSubject?.id}/edit`);
-    }, [role]);
+    const handleEdit = useCallback(
+        (currentSubject: any) => {
+            router.push(`/dashboard/${roleLower}/subjects/${currentSubject?.id}/edit`);
+        },
+        [router, roleLower]
+    );
 
     // Action button (ellipsis)
     const actionBody = useCallback(
@@ -148,7 +153,7 @@ const Subjects: React.FC<SubjectsProps> = ({
             <Button
                 icon="pi pi-ellipsis-v"
                 className="p-button-text hover:bg-transparent hover:border-none hover:shadow-none"
-                onClick={e => {
+                onClick={(e) => {
                     setCurrent(row);
                     panel.current?.toggle(e);
                 }}
@@ -158,27 +163,30 @@ const Subjects: React.FC<SubjectsProps> = ({
     );
 
     // Overlay menu actions
-    const getOverlayActions = useCallback((currentSubject: any) => {
-        return [
-            {
-                label: "View",
-                icon: <Eye className="w-4 h-4 mr-2" />,
-                action: () => currentSubject && handleView(currentSubject)
-            },
-            {
-                label: "Edit",
-                icon: <Edit className="w-4 h-4 mr-2" />,
-                action: () => currentSubject && handleEdit(currentSubject)
-            },
-            {
-                label: "Delete",
-                icon: <Trash2 className="w-4 h-4 mr-2" />,
-                action: () => currentSubject && deleteOne(currentSubject.id)
-            },
-        ];
-    }, [handleView, handleEdit, deleteOne]);
+    const getOverlayActions = useCallback(
+        (currentSubject: any) => {
+            return [
+                {
+                    label: "View",
+                    icon: <Eye className="w-4 h-4 mr-2" />,
+                    action: () => currentSubject && handleView(currentSubject),
+                },
+                {
+                    label: "Edit",
+                    icon: <Edit className="w-4 h-4 mr-2" />,
+                    action: () => currentSubject && handleEdit(currentSubject),
+                },
+                {
+                    label: "Delete",
+                    icon: <Trash2 className="w-4 h-4 mr-2" />,
+                    action: () => currentSubject && deleteOne(currentSubject.id),
+                },
+            ];
+        },
+        [handleView, handleEdit, deleteOne]
+    );
 
-    // Teachers body template (same style as traits/assessments)
+    // Teachers body template
     const teachersBody = useCallback((rowData: any) => {
         const teachers = rowData.teachers || [];
         const count = teachers.length;
@@ -186,10 +194,7 @@ const Subjects: React.FC<SubjectsProps> = ({
         if (count === 0) return <span className="text-gray-400">–</span>;
 
         const fullNames = teachers.map((t: any) =>
-            [t.title, t.firstname, t.othername, t.surname]
-                .filter(Boolean)
-                .join(" ")
-                .trim()
+            [t.title, t.firstname, t.othername, t.surname].filter(Boolean).join(" ").trim()
         );
 
         const preview = fullNames.slice(0, 2).join(", ");
@@ -199,18 +204,29 @@ const Subjects: React.FC<SubjectsProps> = ({
             <div title={fullNames.join(", ")} className="cursor-default">
                 <div className="text-sm font-medium">{count}</div>
                 <div className="text-xs text-gray-500 truncate max-w-xs">
-                    {preview}{more}
+                    {preview}
+                    {more}
                 </div>
             </div>
         );
     }, []);
 
-    // Loading state
-    if (loading) {
+    // Bulk delete handler from selected rows
+    const handleBulkDelete = useCallback(() => {
+        const ids = selected.map((s) => s.id);
+        if (ids.length === 0) return;
+        confirmDelete(ids);
+    }, [selected, confirmDelete]);
+
+    // Loading state (either fetching subjects or performing delete)
+    const loading = isLoadingSubjects || deleteMutation.isPending;
+
+    // Render loading screen if initial load
+    if (isLoadingSubjects) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4" />
                 </div>
             </div>
         );
@@ -219,9 +235,7 @@ const Subjects: React.FC<SubjectsProps> = ({
     return (
         <section className="flex flex-col w-full py-3 px-4">
             <Toast ref={toast} />
-            {(deletingIds.length > 0 || updatingIds.length > 0) && (
-                <Spinner visible onHide={() => { setDeletingIds([]); setUpdatingIds([]); }} />
-            )}
+            {(deletingIds.length > 0 || updatingIds.length > 0) && <Spinner visible onHide={() => { setDeletingIds([]); setUpdatingIds([]); }} />}
 
             <div className="bg-white rounded-md shadow-md space-y-4">
                 {/* Page header */}
@@ -235,6 +249,7 @@ const Subjects: React.FC<SubjectsProps> = ({
                             <p className="text-sm text-gray-500">{subtitle}</p>
                         </div>
                     </div>
+
                     {permit && (
                         <div className="flex gap-3">
                             <Button
@@ -253,9 +268,9 @@ const Subjects: React.FC<SubjectsProps> = ({
                         <i className="pi pi-search ml-2" />
                         <InputText
                             placeholder="Search subjects..."
-                            onInput={e =>
+                            onInput={(e) =>
                                 setFilters({
-                                    global: { value: e.currentTarget.value, matchMode: FilterMatchMode.CONTAINS }
+                                    global: { value: (e.currentTarget as HTMLInputElement).value, matchMode: FilterMatchMode.CONTAINS },
                                 })
                             }
                             className="w-full rounded focus:ring-1 focus:ring-cyan-500 focus:outline-none focus:outline-0 px-8 py-2 transition-all duration-300"
@@ -264,7 +279,7 @@ const Subjects: React.FC<SubjectsProps> = ({
                 </div>
 
                 {/* DataTable */}
-                <div className="">
+                <div>
                     <DataTable
                         value={subjects}
                         paginator
@@ -277,7 +292,7 @@ const Subjects: React.FC<SubjectsProps> = ({
                         scrollHeight="400px"
                         dataKey="id"
                         selection={selected}
-                        onSelectionChange={e => setSelected(e.value)}
+                        onSelectionChange={(e) => setSelected(e.value)}
                         loading={loading}
                         emptyMessage="No subjects found."
                         selectionMode="multiple"
@@ -285,30 +300,20 @@ const Subjects: React.FC<SubjectsProps> = ({
                         {permit && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
                         <Column field="name" header="Name" sortable />
                         <Column field="category" header="Category" sortable />
-                        {permit && <Column
-                            header="Teachers"
-                            body={teachersBody}
-                            style={{ minWidth: "180px" }}
-                        />}
-                        {permit && (
-                            <Column
-                                body={actionBody}
-                                header="Actions"
-                                style={{ textAlign: "center", width: "4rem" }}
-                            />
-                        )}
+                        {permit && <Column header="Teachers" body={teachersBody} style={{ minWidth: "180px" }} />}
+                        {permit && <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />}
                     </DataTable>
                 </div>
             </div>
 
             {/* Bulk delete */}
-            {selected.length > 0 && (
+            {selected.length > 0 && permit && (
                 <div className="mt-4">
                     <Button
                         label={`Delete ${selected.length} subject(s)`}
                         icon="pi pi-trash"
                         className="p-button-danger"
-                        onClick={() => confirmDelete(selected.map(s => s.id))}
+                        onClick={handleBulkDelete}
                         loading={deletingIds.length > 0}
                         disabled={deletingIds.length > 0 || updatingIds.length > 0}
                     />
@@ -318,17 +323,18 @@ const Subjects: React.FC<SubjectsProps> = ({
             {/* Context menu */}
             <OverlayPanel ref={panel} className="shadow-lg rounded-md">
                 <div className="flex flex-col w-48 bg-white rounded-md">
-                    {current && getOverlayActions(current).map(({ label, icon, action }) => (
-                        <Button
-                            key={label}
-                            className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
-                            onClick={action}
-                            disabled={current && updatingIds.includes(current.id)}
-                        >
-                            {icon}
-                            <span className="ml-2">{label}</span>
-                        </Button>
-                    ))}
+                    {current &&
+                        getOverlayActions(current).map(({ label, icon, action }) => (
+                            <Button
+                                key={label}
+                                className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
+                                onClick={action}
+                                disabled={current && updatingIds.includes(current.id)}
+                            >
+                                {icon}
+                                <span className="ml-2">{label}</span>
+                            </Button>
+                        ))}
                 </div>
             </OverlayPanel>
         </section>

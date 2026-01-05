@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { FaPlus } from "react-icons/fa";
 import { Trash2, Edit, Eye } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -15,7 +15,9 @@ import { confirmDialog } from "primereact/confirmdialog";
 import { FilterMatchMode } from "primereact/api";
 import { Toast } from "primereact/toast";
 
-import Spinner from "@/components/Spinner/Spinner";
+import { useGetStudents, useDeleteStudents } from "@/hooks/useStudents";
+import { Student as StudentType } from '@/generated/prisma';
+import Spinner from "@/components/ui/Spinner/Spinner";
 
 type StudentsProps = {
     title?: string;
@@ -30,12 +32,8 @@ const Students: React.FC<StudentsProps> = ({
 }) => {
     const router = useRouter();
     const { data: session } = useSession();
-    const [students, setStudents] = useState<any[]>([]);
-    const [selected, setSelected] = useState<any[]>([]);
-    const [current, setCurrent] = useState<any | null>(null);
-    const [deletingIds, setDeletingIds] = useState<string[]>([]);
-    const [updatingIds, setUpdatingIds] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [selected, setSelected] = useState<StudentType[]>([]);
+    const [current, setCurrent] = useState<StudentType | null>(null);
     const toast = useRef<Toast>(null);
     const panel = useRef<OverlayPanel>(null);
 
@@ -46,10 +44,42 @@ const Students: React.FC<StudentsProps> = ({
     const role = session?.user?.role || 'Guest';
     const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin' || role.toLowerCase() === 'management';
 
-    // Fetch students data on mount
-    useEffect(() => {
-        fetchData();
-    }, []);
+    // Determine the filtering parameters based on the user role
+    const studentQueryParams = useMemo(() => {
+        const params: { teacherid?: string; parentid?: string } = {};
+        if (role.toLowerCase() === 'teacher' && session?.user?.id) {
+            params.teacherid = session.user.id;
+        } else if (role.toLowerCase() === 'parent' && session?.user?.id) {
+            params.parentid = session.user.id;
+        }
+        return params;
+    }, [role, session?.user?.id]);
+
+    // Use the useGetStudents hook for data fetching
+    const {
+        data: fetchedStudents,
+        isLoading,
+        error: fetchError,
+    } = useGetStudents(studentQueryParams);
+
+    // Use the useDeleteStudents hook for mutation
+    const {
+        mutate: deleteStudentsMutation,
+        isPending: isDeleting,
+    } = useDeleteStudents();
+
+
+    //  Map the fetched data and memoize for the DataTable
+    const students = useMemo(() => {
+        if (!fetchedStudents) return [];
+
+        return fetchedStudents.map((s: StudentType & { class?: { name: string } } & any) => ({
+            ...s,
+            fullname: `${s.firstname || ''} ${s.othername || ''} ${s.surname || ''}`.replace(/\s+/g, ' ').trim(),
+            className: s.class?.name || '–'
+        }));
+    }, [fetchedStudents]);
+
 
     // Toast helper function
     const show = useCallback((
@@ -60,41 +90,14 @@ const Students: React.FC<StudentsProps> = ({
         toast.current?.show({ severity: type, summary: title, detail: message, life: 3000 });
     }, []);
 
-    // Fetch students data and add searchable fields (fullname, className)
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch("/api/students");
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-
-            // Add computed searchable fields so global & column filtering works as expected
-            const mapped = (data?.data || []).map((s: any) => ({
-                ...s,
-                fullname: `${s.firstname || ''} ${s.othername || ''} ${s.surname || ''}`.replace(/\s+/g, ' ').trim(),
-                className: s.class?.name || '–'
-            }));
-
-            setStudents(mapped);
-        } catch (err) {
+    // Handle initial fetch error
+    useEffect(() => {
+        if (fetchError) {
             show("error", "Fetch Error", "Failed to fetch students record, please try again.");
-        } finally {
-            setLoading(false);
         }
-    };
+    }, [fetchError, show]);
 
-    // A helper function to make API call to delete records
-    const deleteApi = async (ids: string[]) => {
-        const query = ids.map(id => `ids=${encodeURIComponent(id)}`).join("&");
-        const res = await fetch(`/api/students?${query}`, { method: "DELETE" });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `Status ${res.status}`);
-        }
-        return res;
-    };
-
-    // A helper function to confirm user's action
+    // A helper function to confirm user's action and trigger mutation
     const confirmDelete = useCallback(
         (ids: string[]) => {
             confirmDialog({
@@ -106,28 +109,33 @@ const Students: React.FC<StudentsProps> = ({
                 icon: "pi pi-exclamation-triangle",
                 acceptClassName: "p-button-danger",
                 rejectClassName: "p-button-text",
-                accept: async () => {
-                    setDeletingIds(ids);
-                    try {
-                        await deleteApi(ids);
-                        show(
-                            "success",
-                            "Deleted",
-                            ids.length === 1
-                                ? "Student record deleted successfully."
-                                : `${ids.length} student records deleted successfully.`
-                        );
-                        setStudents(prev => prev.filter(s => !ids.includes(s.id)));
-                        setSelected(prev => prev.filter(s => !ids.includes(s.id)));
-                    } catch (err: any) {
-                        show("error", "Deletion Error", err.message || "Failed to delete student record, please try again.");
-                    } finally {
-                        setDeletingIds([]);
+                accept: () => {
+                    interface ErrorLike { message?: string }
+                    interface DeleteStudentsMutationOptions {
+                        onSuccess?: () => void;
+                        onError?: (error: ErrorLike | unknown) => void;
                     }
+
+                    deleteStudentsMutation(ids, {
+                        onSuccess: (): void => {
+                            show(
+                                "success",
+                                "Deleted",
+                                ids.length === 1
+                                    ? "Student record deleted successfully."
+                                    : `${ids.length} student records deleted successfully.`
+                            );
+                            setSelected((prev: StudentType[]) => prev.filter(s => !ids.includes(s.id)));
+                        },
+                        onError: (err: unknown): void => {
+                            const message = (err as ErrorLike)?.message || "Failed to delete student record, please try again.";
+                            show("error", "Deletion Error", message);
+                        },
+                    } as DeleteStudentsMutationOptions);
                 },
             });
         },
-        [show]
+        [show, deleteStudentsMutation]
     );
 
     // A helper function to delete single record
@@ -142,21 +150,21 @@ const Students: React.FC<StudentsProps> = ({
     // A helper function to handle navigation to new page
     const handleNew = useCallback(() => {
         router.push(`/dashboard/${role}/students/new`);
-    }, [role]);
+    }, [router, role]);
 
     // A helper function to handle navigation to view page
-    const handleView = useCallback((currentStudent: any) => {
+    const handleView = useCallback((currentStudent: StudentType) => {
         router.push(`/dashboard/${role}/students/${currentStudent?.id}/view`);
-    }, [role]);
+    }, [router, role]);
 
     // A helper function to handle navigation to edit page
-    const handleEdit = useCallback((currentStudent: any) => {
+    const handleEdit = useCallback((currentStudent: StudentType) => {
         router.push(`/dashboard/${role}/students/${currentStudent?.id}/edit`);
-    }, [role]);
+    }, [router, role]);
 
     // A helper function to display action body
     const actionBody = useCallback(
-        (row: any) => (
+        (row: StudentType) => (
             <Button
                 icon="pi pi-ellipsis-v"
                 className="p-button-text hover:bg-transparent hover:border-none hover:shadow-none"
@@ -164,13 +172,14 @@ const Students: React.FC<StudentsProps> = ({
                     setCurrent(row);
                     panel.current?.toggle(e);
                 }}
+                disabled={isDeleting}
             />
         ),
-        []
+        [isDeleting]
     );
 
     // A helper function to display context menu
-    const getOverlayActions = useCallback((currentStudent: any) => {
+    const getOverlayActions = useCallback((currentStudent: StudentType) => {
         if (permit) {
             return [
                 {
@@ -197,10 +206,9 @@ const Students: React.FC<StudentsProps> = ({
                 action: () => currentStudent && handleView(currentStudent)
             },
         ];
-    }, [role, deleteOne, handleEdit, handleView]);
+    }, [permit, deleteOne, handleEdit, handleView]);
 
-    // Loading effect
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
@@ -213,8 +221,8 @@ const Students: React.FC<StudentsProps> = ({
     return (
         <section className="flex flex-col w-full py-3 px-4">
             <Toast ref={toast} />
-            {(deletingIds.length > 0 || updatingIds.length > 0) && (
-                <Spinner visible onHide={() => { setDeletingIds([]); setUpdatingIds([]); }} />
+            {isDeleting && (
+                <Spinner visible />
             )}
             <div className="bg-white rounded-md shadow-md space-y-4">
                 {/* Page header */}
@@ -264,14 +272,13 @@ const Students: React.FC<StudentsProps> = ({
                         stripedRows
                         filters={filters}
                         filterDisplay="menu"
-                        // Make sure global filter searches these fields
                         globalFilterFields={["admissionnumber", "fullname", "gender", "section", "className"]}
                         scrollable
                         scrollHeight="400px"
                         dataKey="id"
                         selection={selected}
                         onSelectionChange={e => setSelected(e.value)}
-                        loading={loading}
+                        loading={isLoading || isDeleting}
                         emptyMessage="No students found."
                         selectionMode="multiple"
                     >
@@ -282,7 +289,7 @@ const Students: React.FC<StudentsProps> = ({
                         <Column
                             field="fullname"
                             header="Name"
-                            body={(rowData) => rowData?.fullname || '–'}
+                            body={(rowData: StudentType) => (rowData as any).fullname || '–'}
                             sortable
                             filter
                             filterMatchMode={FilterMatchMode.CONTAINS}
@@ -294,26 +301,24 @@ const Students: React.FC<StudentsProps> = ({
                         <Column
                             field="className"
                             header="Class"
-                            body={(rowData) => rowData?.className || '–'}
+                            body={(rowData: StudentType) => (rowData as any).className || '–'}
                             sortable
                             filter
                             filterMatchMode={FilterMatchMode.CONTAINS}
                         />
 
-
                         <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                     </DataTable>
                 </div>
             </div>
-            {selected.length > 0 && (
+            {selected.length > 0 && permit && (
                 <div className="mt-4">
                     <Button
                         label={`Delete ${selected.length} student(s)`}
                         icon="pi pi-trash"
                         className="p-button-danger"
                         onClick={() => confirmDelete(selected.map(s => s.id))}
-                        loading={deletingIds.length > 0}
-                        disabled={deletingIds.length > 0 || updatingIds.length > 0}
+                        disabled={isDeleting}
                     />
                 </div>
             )}
@@ -325,7 +330,7 @@ const Students: React.FC<StudentsProps> = ({
                             key={label}
                             className="p-button-text text-gray-900 hover:bg-gray-100 w-full text-left px-4 py-2 rounded-none flex items-center"
                             onClick={action}
-                            disabled={current && updatingIds.includes(current.id)}
+                            disabled={isDeleting}
                         >
                             {icon}
                             <span className="ml-2">{label}</span>

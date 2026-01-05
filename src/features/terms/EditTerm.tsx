@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,22 +12,25 @@ import { Toast } from "primereact/toast";
 
 import { termSchema, TermSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
-import { set } from "zod";
 
-// Define term options for dropdown
+import { useGetTermById, useUpdateTerm } from "@/hooks/useTerms";
+
 const termOptions = [
-    { label: 'First', value: 'First' },
-    { label: 'Second', value: 'Second' },
-    { label: 'Third', value: 'Third' }
+    { label: "First", value: "First" },
+    { label: "Second", value: "Second" },
+    { label: "Third", value: "Third" },
 ];
 
 const EditTerm: React.FC = () => {
     const router = useRouter();
     const params = useParams();
-    const toast = useRef<Toast>(null);
-    const [loading, setLoading] = useState(false);
-    const [fetching, setFetching] = useState(false);
     const termId = params.id;
+    const toast = useRef<Toast>(null);
+
+    const { data: term, isPending: fetching } = useGetTermById(termId?.toLocaleString(), {
+        enabled: Boolean(termId),
+    });
+    const updateTermMutation = useUpdateTerm();
 
     const {
         register,
@@ -41,83 +44,59 @@ const EditTerm: React.FC = () => {
         mode: "onBlur",
     });
 
-    // Fetch term data when component mounts
+    // Set form values when term data is loaded
     useEffect(() => {
-        const fetchTermData = async () => {
-            setFetching(true);
-            try {
-                const res = await fetch(`/api/terms/${termId}`, {
-                    method: "GET",
-                    headers: { "Content-Type": "application/json" },
-                });
-                const result = await res.json();
-                if (res.ok) {
-                    // Set form values with fetched data
-                    setValue("session", result.session);
-                    setValue("term", result.term);
-                    setValue("start", result.start ? new Date(result.start) : "");
-                    setValue("end", result.end ? new Date(result.end) : "");
-                    setValue("nextterm", result.nextterm ? new Date(result.nextterm) : "");
-                } else {
-                    show("error", "Fetch Error", result.error || "Failed to fetch term data.");
-                }
-            } catch (err: any) {
-                show("error", "Fetch Error", err.message || "Could not fetch term data.");
-            } finally {
-                setFetching(false);
-            }
-        };
-
-        if (termId) {
-            fetchTermData();
+        if (term) {
+            setValue("session", term.session);
+            setValue("term", term.term);
+            setValue("start", term.start ? new Date(term.start) : "");
+            setValue("end", term.end ? new Date(term.end) : "");
+            setValue("nextterm", term.nextterm ? new Date(term.nextterm) : "");
         }
-    }, [termId, setValue]);
+    }, [term, setValue]);
 
-    // A helper function to handle toast display
-    const show = (
-        severity: "success" | "error",
-        summary: string,
-        detail: string
-    ) => {
+    const show = (severity: "success" | "error", summary: string, detail: string) => {
         toast.current?.show({ severity, summary, detail, life: 3000 });
     };
 
-    // A helper function to handle back navigation
-    const handleBack = () => {
-        router.back();
-    };
+    const handleBack = () => router.back();
 
-    // A function to submit updated data to API
     const onSubmit = async (data: TermSchema) => {
-        setLoading(true);
+        if (!termId) return;
+
+        const id = Array.isArray(termId) ? termId[0] : termId;
+        if (!id) return;
+        const preparedData = {
+            ...data,
+            start: data.start ? (typeof data.start === "string" ? new Date(data.start) : data.start) : undefined,
+            end: data.end ? (typeof data.end === "string" ? new Date(data.end) : data.end) : undefined,
+            nextterm: data.nextterm ? (typeof data.nextterm === "string" ? new Date(data.nextterm) : data.nextterm) : undefined,
+        };
+
         try {
-            // Calculate days open if not provided
-            const startDate = new Date(data.start);
-            const endDate = new Date(data.end);
-            const opendays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-            const res = await fetch(`/api/terms/${termId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...data, daysopen: opendays }),
-            });
-            const result = await res.json();
-            setLoading(false);
-            if (res.ok) {
-                show("success", "Term Updated", "Term has been updated successfully.");
-                setTimeout(() => {
-                    router.back();
-                }, 1500);
-            } else {
-                show("error", "Update Error", result.error || result.message || "Failed to update term record, please try again.");
-            }
+            await updateTermMutation.mutateAsync(
+                { id, data: preparedData },
+                {
+                    onSuccess: () => {
+                        show("success", "Term Updated", "Term has been updated successfully.");
+                        setTimeout(() => router.back(), 1000);
+                    },
+                    onError: (err: any) => {
+                        show(
+                            "error",
+                            "Update Error",
+                            err?.message || "Failed to update term record, please try again."
+                        );
+                    },
+                }
+            );
         } catch (err: any) {
-            show("error", "Update Error", err.message || "Could not update term record.");
-        } finally {
-            setLoading(false);
+            show("error", "Update Error", err?.message || "Could not update term record.");
         }
     };
 
-    // Loading effect 
+    const loading = updateTermMutation.isPending;
+
     if (fetching) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -131,7 +110,8 @@ const EditTerm: React.FC = () => {
     return (
         <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
             <Toast ref={toast} />
-            {loading && <Spinner visible onHide={() => setLoading(false)} />}
+            {loading && <Spinner visible onHide={() => { }} />}
+
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900/80 p-4">Edit Term</h2>
                 <Button
@@ -141,9 +121,10 @@ const EditTerm: React.FC = () => {
                     onClick={handleBack}
                 />
             </div>
+
             <div className="space-y-4 p-4">
                 <form onSubmit={handleSubmit(onSubmit)} className="p-fluid space-y-4">
-                    {/* Session Field */}
+                    {/* Session */}
                     <div className="p-field">
                         <label htmlFor="session">Session</label>
                         <InputText
@@ -155,7 +136,7 @@ const EditTerm: React.FC = () => {
                         {errors.session && <small className="p-error">{errors.session.message}</small>}
                     </div>
 
-                    {/* Term Field */}
+                    {/* Term */}
                     <div className="p-field">
                         <label>Term</label>
                         <Controller
@@ -173,95 +154,76 @@ const EditTerm: React.FC = () => {
                                 />
                             )}
                         />
-                        {errors.term && (
-                            <small className="p-error">{errors.term.message}</small>
-                        )}
+                        {errors.term && <small className="p-error">{errors.term.message}</small>}
                     </div>
 
-                    {/* Start Date Field */}
-                    <div className='flex flex-col mb-1'>
-                        <label htmlFor='start' className='block text-gray-400 font-medium mb-2'>
+                    {/* Start Date */}
+                    <div className="flex flex-col mb-1">
+                        <label htmlFor="start" className="block text-gray-400 font-medium mb-2">
                             Start Date
                         </label>
                         <Controller
-                            name='start'
+                            name="start"
                             control={control}
                             render={({ field }) => (
                                 <Calendar
                                     value={typeof field.value === "string" ? (field.value ? new Date(field.value) : null) : field.value}
                                     onChange={(e) => field.onChange(e.value)}
-                                    dateFormat='dd/mm/yy'
+                                    dateFormat="dd/mm/yy"
                                     showIcon
-                                    placeholder='Term start date'
+                                    placeholder="Term start date"
                                 />
                             )}
                         />
-                        {errors.start && (
-                            <p className='text-red-500 text-sm'>{errors.start.message}</p>
-                        )}
+                        {errors.start && <p className="text-red-500 text-sm">{errors.start.message}</p>}
                     </div>
 
-                    {/* End Date Field */}
-                    <div className='flex flex-col mb-1'>
-                        <label htmlFor='end' className='block text-gray-400 font-medium mb-2'>
+                    {/* End Date */}
+                    <div className="flex flex-col mb-1">
+                        <label htmlFor="end" className="block text-gray-400 font-medium mb-2">
                             End Date
                         </label>
                         <Controller
-                            name='end'
+                            name="end"
                             control={control}
                             render={({ field }) => (
                                 <Calendar
                                     value={typeof field.value === "string" ? (field.value ? new Date(field.value) : null) : field.value}
                                     onChange={(e) => field.onChange(e.value)}
-                                    dateFormat='dd/mm/yy'
+                                    dateFormat="dd/mm/yy"
                                     showIcon
-                                    placeholder='Term end date'
+                                    placeholder="Term end date"
                                 />
                             )}
                         />
-                        {errors.end && (
-                            <p className='text-red-500 text-sm'>{errors.end.message}</p>
-                        )}
+                        {errors.end && <p className="text-red-500 text-sm">{errors.end.message}</p>}
                     </div>
 
-                    {/* Beginning of next term */}
-                    <div className='flex flex-col mb-1'>
-                        <label htmlFor='nextterm' className='block text-gray-400 font-medium mb-2'>
+                    {/* Next Term */}
+                    <div className="flex flex-col mb-1">
+                        <label htmlFor="nextterm" className="block text-gray-400 font-medium mb-2">
                             Next Term Begins
                         </label>
                         <Controller
-                            name='nextterm'
+                            name="nextterm"
                             control={control}
                             render={({ field }) => (
                                 <Calendar
                                     value={typeof field.value === "string" ? (field.value ? new Date(field.value) : null) : field.value}
                                     onChange={(e) => field.onChange(e.value)}
-                                    dateFormat='dd/mm/yy'
+                                    dateFormat="dd/mm/yy"
                                     showIcon
-                                    placeholder='Next term date'
+                                    placeholder="Next term date"
                                 />
                             )}
                         />
-                        {errors.nextterm && (
-                            <p className='text-red-500 text-sm'>{errors.nextterm.message}</p>
-                        )}
+                        {errors.nextterm && <p className="text-red-500 text-sm">{errors.nextterm.message}</p>}
                     </div>
 
                     {/* Action Buttons */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
-                        <Button
-                            label="Cancel"
-                            type="button"
-                            outlined
-                            onClick={handleBack}
-                        />
-                        <Button
-                            label="Update"
-                            type="submit"
-                            className="p-button-primary"
-                            loading={loading}
-                            disabled={loading}
-                        />
+                        <Button label="Cancel" type="button" outlined onClick={handleBack} />
+                        <Button label="Update" type="submit" className="p-button-primary" loading={loading} disabled={loading} />
                     </div>
                 </form>
             </div>

@@ -56,6 +56,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 section: true,
                 lga: true,
                 avarta: true,
+                parentid: true,
+                classid: true,
                 class: {
                     select: {
                         id: true,
