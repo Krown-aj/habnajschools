@@ -6,35 +6,52 @@ import { validateSession, validateRequestBody, handleError, successResponse, Use
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
-        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.PARENT]);
+        // Validate session
+        const validation = await validateSession();
         if (validation.error) return validation.error;
 
-        const { userRole, session } = validation;
-        const where: Prisma.ClassWhereInput = {};
+        const url = new URL(request.url);
+        const teacherParam = url.searchParams.get('teacherid');
+        const parentParam = url.searchParams.get('parentid');
+        const sectionParam = url.searchParams.get('section');
 
-        // Restrict access based on user role
-        if (userRole === UserRole.TEACHER) {
+        const whereClauses: Prisma.ClassWhereInput[] = [];
+
+        if (teacherParam) {
+            // get teacher's section
             const teacherRecord = await prisma.teacher.findUnique({
-                where: { id: session!.user.id },
+                where: { id: teacherParam },
                 select: { section: true }
             });
 
             const orConditions: Prisma.ClassWhereInput[] = [
-                { formmasterid: session!.user.id },
-                { lessons: { some: { teacherid: session!.user.id } } },
+                { formmasterid: teacherParam },
+                { lessons: { some: { teacherid: teacherParam } } }
             ];
+
             if (teacherRecord?.section) {
                 orConditions.push({ section: teacherRecord.section });
             }
 
-            where.OR = orConditions;
-        } else if (userRole === UserRole.PARENT) {
-            where.students = {
-                some: {
-                    parentid: session!.user.id
-                }
-            };
+            whereClauses.push({ OR: orConditions });
         }
+
+        if (parentParam) {
+            // Classes that have students whose parentid matches
+            whereClauses.push({
+                students: {
+                    some: {
+                        parentid: parentParam
+                    }
+                }
+            });
+        }
+
+        if (sectionParam) {
+            whereClauses.push({ section: sectionParam.toLocaleUpperCase() });
+        }
+
+        const where: Prisma.ClassWhereInput = whereClauses.length ? { AND: whereClauses } : {};
 
         const classes = await prisma.class.findMany({
             where,
@@ -67,7 +84,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             },
             orderBy: { name: 'asc' }
         });
-
         return successResponse({ data: classes });
     } catch (error) {
         return handleError(error, 'Failed to fetch classes');
