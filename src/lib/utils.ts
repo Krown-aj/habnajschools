@@ -60,24 +60,6 @@ export const getTeacherRemark = (average: number | undefined | null) => {
     return "Below expectation — seek support and follow a guided study plan.";
 };
 
-//base image retriever
-export const getBase64ImageFromUrl = async (url?: string | null, place_holder?: string | null) => {
-    const safeUrl = url && String(url).trim() ? url : place_holder;
-    try {
-        if (!safeUrl) return null;
-        const res = await fetch(safeUrl);
-        const blob = await res.blob();
-        return await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(String(reader.result));
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-    } catch {
-        return null;
-    }
-};
-
 // convert to ordinal (1 -> 1st, 2 -> 2nd, etc)
 export const toOrdinal = (value: any) => {
     const n = Number(String(value).replace(/[^0-9]/g, ""));
