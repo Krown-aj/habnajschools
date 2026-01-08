@@ -103,12 +103,12 @@ const menuItems = [
     {
         title: 'ACADEMICS',
         items: [
-            {
+            /* {
                 icon: Calendar,
                 label: 'Times Table',
                 href: (role: string) => `/dashboard/${role}/lessons`,
                 visible: ['admin', 'super', 'teacher']
-            },
+            }, */
             {
                 icon: ClipboardList,
                 label: 'Gradings',

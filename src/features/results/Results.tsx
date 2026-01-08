@@ -36,7 +36,7 @@ import JSZip from "jszip";
 import { saveAs } from "file-saver";
 
 import Spinner from "@/components/Spinner/Spinner";
-import { getTeacherRemark, getBase64ImageFromUrl, toOrdinal, parseOrdinal } from "@/lib/utils";
+import { getTeacherRemark, toOrdinal, parseOrdinal } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -274,6 +274,24 @@ const Results: React.FC = () => {
         router.push(`/dashboard/${role}/report-cards/${row.id}/view`);
         panel.current?.hide();
     }, [router, role]);
+
+    //Utility: convert image URL to based64
+    const getBase64ImageFromUrl = useCallback(async (url?: string | null, place_holder?: string | null) => {
+        const safeUrl = url && String(url).trim() ? url : place_holder;
+        try {
+            if (!safeUrl) return null;
+            const res = await fetch(safeUrl);
+            const blob = await res.blob();
+            return await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(String(reader.result));
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch {
+            return null;
+        }
+    }, []);
 
     // normalize assessment label
     const normalizeAssessmentName = useCallback((raw: any) => (String(raw ?? "").trim().toUpperCase()), []);
