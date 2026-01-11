@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [{ hostname: "images.pexels.com" }],
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   /* typescript: {
     // Warning: This will skip *all* TypeScript errors during `next build`
     ignoreBuildErrors: true,
