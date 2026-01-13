@@ -4,6 +4,7 @@ import { gradingSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, UserRole } from '@/lib/utils/api-helpers';
 import { Terms } from '@/generated/prisma';
 
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
         const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER]);
