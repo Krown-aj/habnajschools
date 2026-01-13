@@ -150,7 +150,7 @@ export const socialLinks = [
 ];
 
 export const images = {
-    student1: "/assets/students1.j",
+    student1: "/assets/students1.webp",
     student2: "/assets/students2.webp",
     student3: "/assets/students3.webp",
     student4: "/assets/students4.webp",
