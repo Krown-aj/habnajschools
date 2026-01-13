@@ -1,36 +1,4 @@
 import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn, } from 'react-icons/fa';
-import student1 from "@/assets/students1.png";
-import student2 from "@/assets/students2.png";
-import student3 from "@/assets/students3.png";
-import student4 from "@/assets/students4.png";
-import student5 from "@/assets/students5.png";
-import student6 from "@/assets/students6.png";
-import student7 from "@/assets/students7.png";
-import student8 from "@/assets/students8.png";
-import principal from "@/assets/Musa.jpg";
-import headteacher from "@/assets/headteacher.png";
-import management from "@/assets/Musa.jpg";
-import proprietor from "@/assets/proprietor.jpg";
-import director from "@/assets/director.jpg";
-import basketball from "@/assets/basketball.jpg";
-import invest from "@/assets/invest.jpg";
-import quest from "@/assets/quest.jpg";
-import computerroom from "@/assets/computerroom.jpg";
-import computerroom2 from "@/assets/computerroom2.jpg";
-import primary from "@/assets/primary.jpg";
-import nursery from "@/assets/nursery.jpg";
-import jss from "@/assets/jss.jpg";
-import jss2 from "@/assets/jss2.jpg";
-import habnaj from "@/assets/habnaj.jpg";
-import headboy from "@/assets/headboy.jpg";
-import footballer from "@/assets/footballer.jpg";
-import engineer from "@/assets/engineer.jpg";
-import doctors from "@/assets/doctors.jpg";
-import teachers from "@/assets/teachers.jpg";
-import careerday from "@/assets/careerday.jpg";
-import lawyers from "@/assets/lawyers.jpg";
-import military from "@/assets/military.jpg";
-import pilots from "@/assets/pilots.jpg";
 
 // Type definitions for menu
 export interface SubLink {
@@ -182,39 +150,43 @@ export const socialLinks = [
 ];
 
 export const images = {
-    student1,
-    student2,
-    student3,
-    student4,
-    student5,
-    student6,
-    student7,
-    student8,
-    principal,
-    headteacher,
-    management,
-    proprietor,
-    director,
-    basketball,
-    invest,
-    quest,
-    computerroom,
-    computerroom2,
-    primary,
-    nursery,
-    jss,
-    jss2,
-    habnaj,
-    headboy,
-    footballer,
-    engineer,
-    doctors,
-    teachers,
-    careerday,
-    lawyers,
-    military,
-    pilots,
-}
+    student1: "/assets/students1.j",
+    student2: "/assets/students2.webp",
+    student3: "/assets/students3.webp",
+    student4: "/assets/students4.webp",
+    student5: "/assets/students5.webp",
+    student6: "/assets/students6.webp",
+    student7: "/assets/students7.webp",
+    student8: "/assets/students8.webp",
+
+    principal: "/assets/Musa.webp",
+    headteacher: "/assets/headteacher.webp",
+    management: "/assets/Musa.webp",
+    proprietor: "/assets/proprietor.webp",
+    director: "/assets/director.webp",
+
+    basketball: "/assets/basketball.webp",
+    invest: "/assets/invest.webp",
+    quest: "/assets/quest.webp",
+    computerroom: "/assets/computerroom.webp",
+    computerroom2: "/assets/computerroom2.webp",
+
+    primary: "/assets/primary.webp",
+    nursery: "/assets/nursery.webp",
+    jss: "/assets/jss.webp",
+    jss2: "/assets/jss2.webp",
+
+    habnaj: "/assets/habnaj.webp",
+    headboy: "/assets/headboy.webp",
+    footballer: "/assets/footballer.webp",
+    engineer: "/assets/engineer.webp",
+    doctors: "/assets/doctors.webp",
+    teachers: "/assets/teachers.webp",
+    careerday: "/assets/careerday.webp",
+    lawyers: "/assets/lawyers.webp",
+    military: "/assets/military.webp",
+    pilots: "/assets/pilots.webp",
+};
 
 export const CONTACT = {
     email: "habnaj2021international@gmail.com",
