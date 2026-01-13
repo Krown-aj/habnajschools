@@ -6,12 +6,12 @@ export default withAuth(
         const token = req.nextauth.token;
         const { pathname } = req.nextUrl;
 
-        // Redirect /signin to /auth/signin
-        if (pathname === "/signin" || "/login") {
+        // Redirect /signin or /login to /auth/signin
+        if (pathname === "/signin" || pathname === "/login") {
             return NextResponse.redirect(new URL("/auth/signin", req.url));
         }
 
-        // Define role-based access
+        // Role-based access
         const roleRoutes = {
             super: ["/dashboard/super"],
             admin: ["/dashboard/admin"],
@@ -21,14 +21,12 @@ export default withAuth(
             parent: ["/dashboard/parent"],
         };
 
-        // Check if user is accessing a protected route
         for (const [role, routes] of Object.entries(roleRoutes)) {
             for (const route of routes) {
-                if (pathname.startsWith(route)) {
-                    if (token?.role !== role) {
-                        // Redirect to appropriate dashboard based on user's role
-                        return NextResponse.redirect(new URL(`/dashboard/${token?.role || 'auth/signin'}`, req.url));
-                    }
+                if (pathname.startsWith(route) && token?.role !== role) {
+                    return NextResponse.redirect(
+                        new URL(token?.role ? `/dashboard/${token.role}` : '/auth/signin', req.url)
+                    );
                 }
             }
         }
@@ -40,8 +38,13 @@ export default withAuth(
             authorized: ({ token, req }) => {
                 const { pathname } = req.nextUrl;
 
-                // Allow access to public routes
-                if (pathname === "/" || pathname.startsWith("/auth/") || pathname === "/signin" || "/login") {
+                // Allow public routes
+                if (
+                    pathname === "/" ||
+                    pathname.startsWith("/auth/") ||
+                    pathname === "/signin" ||
+                    pathname === "/login"
+                ) {
                     return true;
                 }
 
