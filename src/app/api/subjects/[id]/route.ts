@@ -99,7 +99,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // Check for name conflicts
         if (name) {
             const existingSubject = await prisma.subject.findFirst({
-                where: { name, id: { not: id } }
+                where: {
+                    name: {
+                        equals: name,
+                        mode: "insensitive"
+                    },
+                    section: {
+                        equals: section,
+                        mode: 'insensitive'
+                    },
+                    id: { not: id }
+                }
             });
 
             if (existingSubject) {

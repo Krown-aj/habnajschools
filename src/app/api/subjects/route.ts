@@ -104,11 +104,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const bodyValidation = await validateRequestBody(request, subjectSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { name, category, teacherIds } = bodyValidation.data!;
+        const { name, category, teacherIds, section } = bodyValidation.data!;
 
         // Check if subject name already exists
         const existingSubject = await prisma.subject.findFirst({
-            where: { name },
+            where: {
+                name: {
+                    equals: name,
+                    mode: "insensitive"
+                },
+                section: {
+                    equals: section,
+                    mode: 'insensitive'
+                }
+            },
         });
 
         if (existingSubject) {
@@ -130,6 +139,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             data: {
                 name,
                 category,
+                section,
                 teachers: teacherIds ? { connect: teacherIds.map(id => ({ id })) } : undefined,
             },
             select: {
