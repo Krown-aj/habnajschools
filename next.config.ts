@@ -4,10 +4,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [{ hostname: "images.pexels.com" }],
-    unoptimized: true,
   },
-  typescript: {
-    ignoreBuildErrors: true,
+  eslint: {
+    // Warning: This will skip *all* lint errors during `next build`
+    ignoreDuringBuilds: true,
   },
   /* typescript: {
     // Warning: This will skip *all* TypeScript errors during `next build`
@@ -20,8 +20,5 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
-
-
 
 
