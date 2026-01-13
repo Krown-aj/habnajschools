@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import profilePic from "@/assets/profile1.png";
+//import profilePic from "@/assets/profile1.png";
 import { useRouter, useParams } from "next/navigation";
 import { Toast } from "primereact/toast";
 import { Badge } from "primereact/badge";
@@ -133,7 +133,12 @@ const Teacher: React.FC<TeacherProps> = ({
                             <ImageView
                                 path={imageDropboxPath}
                                 onChange={handleAvatarChange}
-                                placeholder={typeof fallbackImageSrc === "string" ? fallbackImageSrc : profilePic.src}
+                                placeholder={
+                                    typeof fallbackImageSrc === "string"
+                                        ? fallbackImageSrc
+                                        : "/assets/profile1.webp"
+                                }
+                                /*  placeholder={typeof fallbackImageSrc === "string" ? fallbackImageSrc : profilePic.src} */
                                 className="w-12 h-12 sm:w-24 sm:h-24 rounded-full object-cover"
                                 width={96}
                                 height={96}

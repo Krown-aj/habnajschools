@@ -10,7 +10,7 @@ import { InputTextarea } from "primereact/inputtextarea";
 import { Dropdown } from "primereact/dropdown";
 import { Calendar } from "primereact/calendar";
 import ImageView, { UploadResult } from "@/components/ImageView/ImageView";
-import profilePic from "@/assets/profile1.png";
+//import profilePic from "@/assets/profile1.png";
 import { motion } from "framer-motion";
 
 type Role = "super" | "admin" | "teacher" | "student" | "parent" | "Guest" | string;
@@ -90,7 +90,9 @@ export default function Profile() {
     };
     // --- end FIX ---
 
-    const staticProfilePicUrl = (profilePic as any)?.src ?? profilePic;
+    //const staticProfilePicUrl = (profilePic as any)?.src ?? profilePic;
+    const staticProfilePicUrl = "/assets/profile1.webp";
+
 
     const shapeToDefaults = (p: any, r?: Role) => {
         const base: any = {
