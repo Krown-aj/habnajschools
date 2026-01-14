@@ -647,6 +647,7 @@ const Grade: React.FC = () => {
                 rowData={rowData}
                 defaultColDef={{ resizable: true, sortable: true, filter: true, suppressMovable: true }}
                 quickFilterText={quickFilter}
+                maintainColumnOrder={false}
                 pagination
                 paginationPageSize={20}
                 paginationPageSizeSelector={[5, 10, 20, 50, 100]}
