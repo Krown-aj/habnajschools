@@ -297,57 +297,92 @@ const Grade: React.FC = () => {
   /* ---------------------------
      Column definitions based on gradingPolicy.assessments
      --------------------------- */
-  const columnDefs = useMemo<ColDef[]>(() => {
-    //const assessments = gradingPolicy?.assessments ?? [];
-    const orderMap = {
-      CA1: 0,
-      CA2: 1,
-      CA3: 2,
-      Exams: 3,
-    } as const;
+  /**
+ * Explicit assessment order
+ */
+  const ASSESSMENT_ORDER = {
+    CA1: 0,
+    CA2: 1,
+    CA3: 2,
+    Exams: 3,
+  } as const;
 
+  const columnDefs = useMemo<ColDef[]>(() => {
+    /**
+     * Sort assessments safely and immutably
+     */
     const assessments = [...(gradingPolicy?.assessments ?? [])].sort(
       (a, b) =>
-        (orderMap[a.name as keyof typeof orderMap] ?? 999) -
-        (orderMap[b.name as keyof typeof orderMap] ?? 999)
+        (ASSESSMENT_ORDER[a.name as keyof typeof ASSESSMENT_ORDER] ?? 999) -
+        (ASSESSMENT_ORDER[b.name as keyof typeof ASSESSMENT_ORDER] ?? 999)
     );
 
+    /**
+     * Dynamic assessment columns
+     */
     const assessmentColumns: ColDef[] = assessments.map((assessment) => ({
       headerName: assessment.name,
       field: assessment.id,
       editable: true,
       filter: "agTextColumnFilter",
       sortable: true,
+
       valueSetter: (params) => {
-        const newValueRaw = params.newValue;
-        const newValue = typeof newValueRaw === "string" ? parseFloat(newValueRaw) : Number(newValueRaw);
-        if (!Number.isFinite(newValue) || Number.isNaN(newValue)) {
-          toast.current?.show({ severity: "warn", summary: "Invalid Score", detail: "Please enter a valid numeric score.", life: 3000 });
+        const raw = params.newValue;
+        const value = typeof raw === "string" ? Number(raw) : raw;
+
+        if (!Number.isFinite(value)) {
+          toast.current?.show({
+            severity: "warn",
+            summary: "Invalid Score",
+            detail: "Please enter a valid numeric score.",
+            life: 3000,
+          });
           return false;
         }
-        if (newValue >= 0 && newValue <= assessment.maxScore) {
-          params.data[assessment.id] = newValue;
-          return true;
+
+        if (value < 0 || value > assessment.maxScore) {
+          toast.current?.show({
+            severity: "warn",
+            summary: "Invalid Score",
+            detail: `Score must be between 0 and ${assessment.maxScore}`,
+            life: 3000,
+          });
+          return false;
         }
-        toast.current?.show({ severity: "warn", summary: "Invalid Score", detail: `Score must be between 0 and ${assessment.maxScore}`, life: 3000 });
-        return false;
+
+        params.data[assessment.id] = value;
+        return true;
       },
     }));
 
+    /**
+     * Static + computed columns
+     */
     return [
-      { headerName: "Student Name", field: "name", filter: "agTextColumnFilter", sortable: true },
+      {
+        headerName: "Student Name",
+        field: "name",
+        filter: "agTextColumnFilter",
+        sortable: true,
+      },
+
       ...assessmentColumns,
+
       {
         headerName: "Total",
         field: "serverTotal",
         filter: "agNumberColumnFilter",
         sortable: true,
         valueGetter: (params) => {
-          const computed = (gradingPolicy?.assessments ?? []).reduce((total, a) => total + (Number(params.data[a.id]) || 0), 0);
-          const val = params.data.serverTotal ?? computed;
-          return val !== null && val !== undefined ? val : "";
+          const computed = assessments.reduce(
+            (sum, a) => sum + (Number(params.data[a.id]) || 0),
+            0
+          );
+          return params.data.serverTotal ?? computed ?? "";
         },
       },
+
       {
         headerName: "Grade",
         field: "serverGrade",
@@ -355,7 +390,12 @@ const Grade: React.FC = () => {
         sortable: true,
         valueGetter: (params) => {
           if (params.data.serverGrade) return params.data.serverGrade;
-          const score = (gradingPolicy?.assessments ?? []).reduce((total, a) => total + (Number(params.data[a.id]) || 0), 0);
+
+          const score = assessments.reduce(
+            (sum, a) => sum + (Number(params.data[a.id]) || 0),
+            0
+          );
+
           if (score >= 70) return "A";
           if (score >= 60) return "B";
           if (score >= 50) return "C";
@@ -364,6 +404,7 @@ const Grade: React.FC = () => {
           return "F";
         },
       },
+
       {
         headerName: "Remark",
         field: "serverRemark",
@@ -371,7 +412,12 @@ const Grade: React.FC = () => {
         sortable: true,
         valueGetter: (params) => {
           if (params.data.serverRemark) return params.data.serverRemark;
-          const score = (gradingPolicy?.assessments ?? []).reduce((total, a) => total + (Number(params.data[a.id]) || 0), 0);
+
+          const score = assessments.reduce(
+            (sum, a) => sum + (Number(params.data[a.id]) || 0),
+            0
+          );
+
           if (score >= 70) return "Excellent";
           if (score >= 60) return "Very Good";
           if (score >= 50) return "Good";
@@ -380,6 +426,7 @@ const Grade: React.FC = () => {
           return "Fail";
         },
       },
+
       {
         headerName: "Position",
         field: "subjectPosition",
