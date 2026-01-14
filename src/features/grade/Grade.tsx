@@ -320,12 +320,13 @@ const Grade: React.FC = () => {
     /**
      * Dynamic assessment columns
      */
-    const assessmentColumns: ColDef[] = assessments.map((assessment) => ({
+    const assessmentColumns: ColDef[] = assessments.map((assessment, index) => ({
       headerName: assessment.name,
       field: assessment.id,
+      colId: `${assessment.id}-${index}`,
       editable: true,
-      filter: "agTextColumnFilter",
-      sortable: true,
+      filter: false,
+      sortable: false,
 
       valueSetter: (params) => {
         const raw = params.newValue;
