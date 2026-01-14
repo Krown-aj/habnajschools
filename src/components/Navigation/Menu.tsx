@@ -125,7 +125,7 @@ const menuItems = [
                 icon: BarChart3,
                 label: 'Report Cards',
                 href: (role: string) => `/dashboard/${role}/results`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
+                visible: ['admin', 'super', 'student', 'parent']
             },
             /*  {
                  icon: UserCheck,

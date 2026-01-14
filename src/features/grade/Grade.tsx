@@ -298,7 +298,20 @@ const Grade: React.FC = () => {
      Column definitions based on gradingPolicy.assessments
      --------------------------- */
   const columnDefs = useMemo<ColDef[]>(() => {
-    const assessments = gradingPolicy?.assessments ?? [];
+    //const assessments = gradingPolicy?.assessments ?? [];
+    const orderMap = {
+      CA1: 0,
+      CA2: 1,
+      CA3: 2,
+      Exams: 3,
+    } as const;
+
+    const assessments = [...(gradingPolicy?.assessments ?? [])].sort(
+      (a, b) =>
+        (orderMap[a.name as keyof typeof orderMap] ?? 999) -
+        (orderMap[b.name as keyof typeof orderMap] ?? 999)
+    );
+
     const assessmentColumns: ColDef[] = assessments.map((assessment) => ({
       headerName: assessment.name,
       field: assessment.id,
@@ -584,10 +597,10 @@ const Grade: React.FC = () => {
                 ref={gridRef}
                 columnDefs={columnDefs}
                 rowData={rowData}
-                defaultColDef={{ resizable: true, sortable: true, filter: true }}
+                defaultColDef={{ resizable: true, sortable: true, filter: true, suppressMovable: true }}
                 quickFilterText={quickFilter}
                 pagination
-                paginationPageSize={10}
+                paginationPageSize={20}
                 paginationPageSizeSelector={[5, 10, 20, 50, 100]}
                 suppressClickEdit={false}
                 theme="legacy"
