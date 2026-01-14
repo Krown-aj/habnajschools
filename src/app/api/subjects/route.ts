@@ -68,6 +68,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 id: true,
                 name: true,
                 category: true,
+                section: true,
                 teachers: {
                     select: {
                         id: true,

@@ -15,9 +15,6 @@ import { Toast } from "primereact/toast";
 import { z } from "zod";
 
 import Spinner from "@/components/Spinner/Spinner";
-import { useGetStudents } from "@/hooks/useStudents";
-import { useGetClasses } from "@/hooks/useClasses";
-import { useGetSubjects } from "@/hooks/useSubjects";
 
 /* ---------------------------
    Types
@@ -33,10 +30,12 @@ interface Class {
   id: string;
   name: string;
   category: string;
+  section: string;
 }
 interface Subject {
   id: string;
   name: string;
+  section: string;
 }
 interface Grading {
   id: string;
@@ -201,20 +200,25 @@ const Grade: React.FC = () => {
      --------------------------- */
   useEffect(() => {
     if (watchedClassId) {
-      const filtered = allStudents.filter((s) => s.class.id === watchedClassId);
+      const selectedClass = classes.find(c => c.id === watchedClassId);
+      const filtered = allStudents.filter((s) => s.class?.id === watchedClassId);
+      const filteredSubjects = subjects.filter((subject: any) => subject.section === selectedClass?.section);
+
       setFilteredStudents(filtered);
+      setSubjects(filteredSubjects);
       setValue("subjectId", "");
       setStudentAssessments([]);
       setStudentGrades([]);
-      // ensure loading reset in case it was left true
       setLoading(false);
     } else {
       setFilteredStudents([]);
+      setSubjects([]);
       setStudentAssessments([]);
       setStudentGrades([]);
       setLoading(false);
     }
-  }, [watchedClassId, allStudents, setValue]);
+  }, [watchedClassId, allStudents, subjects, classes, setValue]);
+
 
   /* ---------------------------
      When class + subject selected: fetch aggregated grades + per-assessment rows + assessment defs
