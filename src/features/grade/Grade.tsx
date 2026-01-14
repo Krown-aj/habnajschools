@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useMemo } from "react";
+import React, { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
@@ -13,41 +13,51 @@ import { Button } from "primereact/button";
 import { Toast } from "primereact/toast";
 import { z } from "zod";
 import Spinner from "@/components/Spinner/Spinner";
+import { useSession } from "next-auth/react";
+
+import { useGetStudents } from "@/hooks/useStudents";
+import { useGetClasses } from "@/hooks/useClasses";
+import { useGetSubjects } from "@/hooks/useSubjects";
 
 /* ---------------------------
-   Types (lightweight)
-   --------------------------- */
+   Types
+--------------------------- */
 interface Student {
   id: string;
   firstname: string;
   othername: string | null;
   surname: string;
   class: { id: string; name: string; category: string };
+  section?: string | null;
+  admissionnumber?: string;
 }
+
 interface Class {
   id: string;
   name: string;
   category: string;
 }
+
 interface Subject {
   id: string;
   name: string;
 }
+
 interface Grading {
   id: string;
   title: string;
   session: string;
   term: string;
-  published: boolean;
-  gradingPolicyId: string;
+  gradingPolicyId?: string;
 }
+
 interface Assessment {
   id: string;
   name: string;
-  weight: number;
-  maxScore: number;
-  gradingPolicyId?: string;
+  weight?: number;
+  maxScore?: number;
 }
+
 interface StudentAssessment {
   id?: string | null;
   studentId: string;
@@ -56,23 +66,23 @@ interface StudentAssessment {
   classId: string;
   gradingId: string;
   score: number;
-  assessment?: Assessment;
 }
+
 interface StudentGrade {
   id?: string;
-  score: number;
-  grade?: string;
-  remark?: string;
   studentId: string;
   subjectId: string;
   classId: string;
   gradingId: string;
+  score: number;
+  grade?: string;
+  remark?: string;
   subjectPosition?: string | null;
 }
 
 /* ---------------------------
    Form schema
-   --------------------------- */
+--------------------------- */
 const formSchema = z.object({
   classId: z.string().min(1, "Class is required"),
   subjectId: z.string().min(1, "Subject is required"),
@@ -80,11 +90,11 @@ const formSchema = z.object({
 
 /* ---------------------------
    Fetch helper
-   --------------------------- */
+--------------------------- */
 const fetchWithErrorHandling = async (url: string, controller: AbortController) => {
-  const response = await fetch(url, { signal: controller.signal });
-  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-  const data = await response.json();
+  const res = await fetch(url, { signal: controller.signal });
+  if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  const data = await res.json();
   return data.data ?? data;
 };
 
@@ -93,31 +103,29 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 
 /* ---------------------------
    Component
-   --------------------------- */
+--------------------------- */
 const Grade: React.FC = () => {
   const router = useRouter();
   const params = useParams();
+  const gradingId = (params?.id as string) ?? "";
 
-  // refs
   const toast = useRef<Toast | null>(null);
   const gridRef = useRef<AgGridReact | null>(null);
 
-  // state (stable hook order)
-  const [loading, setLoading] = useState<boolean>(true); // initial data fetch
-  const [saving, setSaving] = useState<boolean>(false);  // only for save operations
+  const { data: session } = useSession();
+  const role = session?.user?.role ?? "Guest";
+  const permit = ["super", "admin", "management"].includes(role.toLowerCase());
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [grading, setGrading] = useState<Grading | null>(null);
-  const [gradingPolicy, setGradingPolicy] = useState<{ id?: string; title?: string; passMark?: number; maxScore?: number; assessments?: Assessment[] } | null>(null);
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [gradingPolicy, setGradingPolicy] = useState<{ assessments?: Assessment[] } | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [studentAssessments, setStudentAssessments] = useState<StudentAssessment[]>([]);
   const [studentGrades, setStudentGrades] = useState<StudentGrade[]>([]);
-  const [quickFilter, setQuickFilter] = useState<string>("");
+  const [quickFilter, setQuickFilter] = useState("");
 
-  const gradingId = (params?.id as string) ?? "";
-
-  // react-hook-form
   const { control, handleSubmit, setValue, watch, formState: { errors } } = useForm<{ classId: string; subjectId: string }>({
     resolver: zodResolver(formSchema),
     defaultValues: { classId: "", subjectId: "" },
@@ -126,79 +134,51 @@ const Grade: React.FC = () => {
   const watchedClassId = watch("classId");
   const watchedSubjectId = watch("subjectId");
 
-  // Show toast after spinner is hidden (tiny delay to let overlay disappear)
-  const showToastAfterSpinner = async (opts: { severity: "success" | "info" | "warn" | "error"; summary: string; detail?: string }) => {
-    await new Promise((r) => setTimeout(r, 120));
-    toast.current?.show(opts as any);
-  };
+  /* ---------------------------
+     Role-based hook params
+  --------------------------- */
+  const studentParams: { teacherid?: string; parentid?: string } = {};
+  if (role.toLowerCase() === "teacher" && session?.user?.id) studentParams.teacherid = session.user.id;
+  else if (role.toLowerCase() === "parent" && session?.user?.id) studentParams.parentid = session.user.id;
 
   /* ---------------------------
-     INITIAL LOAD: grading, classes, subjects, students, gradingPolicy
-     --------------------------- */
+     Fetch classes, subjects, students (role-aware)
+  --------------------------- */
+  const { data: fetchedClasses } = useGetClasses({});
+  const { data: fetchedSubjects } = useGetSubjects({});
+  const { data: fetchedStudents } = useGetStudents(studentParams);
+
+  /* ---------------------------
+     Map students to include full class object
+  --------------------------- */
   useEffect(() => {
-    const controller = new AbortController();
-    let mounted = true;
+    if (fetchedStudents && fetchedClasses) {
+      const mapped: Student[] = fetchedStudents.map((s) => {
+        const cls = fetchedClasses.find((c) => c.id === s.classid);
+        return {
+          ...s,
+          class: {
+            id: cls?.id ?? s.classid,
+            name: cls?.name ?? "Unknown",
+            category: "Uncategorized",
+          },
+        };
+      });
+      setStudents(mapped);
+    }
+  }, [fetchedStudents, fetchedClasses]);
 
-    const fetchData = async () => {
-      if (!gradingId) {
-        if (mounted) {
-          setLoading(false);
-          await showToastAfterSpinner({ severity: "error", summary: "Invalid Grading", detail: "Grading ID is missing." });
-        }
-        return;
-      }
-
-      try {
-        if (mounted) setLoading(true);
-        const [gradingResponse, classesResponse, subjectsResponse, studentsResponse] = await Promise.all([
-          fetchWithErrorHandling(`/api/gradings/${gradingId}`, controller),
-          fetchWithErrorHandling("/api/classes", controller),
-          fetchWithErrorHandling("/api/subjects", controller),
-          fetchWithErrorHandling("/api/students", controller),
-        ]);
-
-        if (!mounted) return;
-
-        console.log("Initial fetch results:", { classesResponse, });
-
-        setGrading(gradingResponse);
-        setClasses(classesResponse);
-        setSubjects(subjectsResponse);
-        setAllStudents(studentsResponse);
-        setFilteredStudents(studentsResponse);
-
-        if (gradingResponse?.gradingPolicyId) {
-          try {
-            const policyResponse = await fetchWithErrorHandling(`/api/policies/${gradingResponse.gradingPolicyId}`, controller);
-            setGradingPolicy(policyResponse);
-          } catch (e) {
-            console.warn("Failed to load grading policy:", e);
-          }
-        }
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
-        console.error("Initial fetch error:", err);
-        if (mounted) await showToastAfterSpinner({ severity: "error", summary: "Error", detail: err.message || "Failed to load data" });
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    void fetchData();
-    return () => { mounted = false; controller.abort(); };
-  }, [gradingId]);
 
   /* ---------------------------
-     When class selected: filter students
-     --------------------------- */
+     Filter students by class
+  --------------------------- */
   useEffect(() => {
     if (watchedClassId) {
-      const filtered = allStudents.filter((s) => s.class.id === watchedClassId);
+      const filtered = students.filter((s) => s.class.id === watchedClassId);
       setFilteredStudents(filtered);
       setValue("subjectId", "");
       setStudentAssessments([]);
       setStudentGrades([]);
-      // ensure loading reset in case it was left true
       setLoading(false);
     } else {
       setFilteredStudents([]);
@@ -206,82 +186,87 @@ const Grade: React.FC = () => {
       setStudentGrades([]);
       setLoading(false);
     }
-  }, [watchedClassId, allStudents, setValue]);
+  }, [watchedClassId, students, setValue]);
 
   /* ---------------------------
-     When class + subject selected: fetch aggregated grades + per-assessment rows + assessment defs
-     Endpoint: /api/grade?gradingId=...&classId=...&subjectId=...
-     Expected response shape: { grades, studentAssessments, assessments }
-     --------------------------- */
+     Fetch grading & policy
+  --------------------------- */
   useEffect(() => {
+    if (!gradingId) {
+      setLoading(false);
+      toast.current?.show({ severity: "error", summary: "Invalid Grading", detail: "Grading ID is missing" });
+      return;
+    }
+
     const controller = new AbortController();
     let mounted = true;
 
-    const fetchMarksAndGrades = async () => {
-      // If missing required params — clear data and ensure loading is false, then return
-      if (!gradingId || !watchedClassId || !watchedSubjectId) {
-        if (mounted) {
-          setStudentAssessments([]);
-          setStudentGrades([]);
-          setLoading(false);
-        }
-        return;
-      }
-
+    const fetchGrading = async () => {
       try {
         if (mounted) setLoading(true);
-
-        const payload = await fetchWithErrorHandling(
-          `/api/grade?gradingId=${gradingId}&classId=${watchedClassId}&subjectId=${watchedSubjectId}`,
-          controller
-        ).catch((e) => {
-          console.warn("Fetch grades/assessments failed:", e);
-          return { grades: [], studentAssessments: [], assessments: [] };
-        });
-
+        const gradingResp = await fetchWithErrorHandling(`/api/gradings/${gradingId}`, controller);
         if (!mounted) return;
+        setGrading(gradingResp);
 
-        const grades = payload?.grades ?? [];
-        const studentAssessmentsRows = payload?.studentAssessments ?? [];
-        const assessmentsFromServer = payload?.assessments ?? [];
-
-        // adopt server assessment defs for columns if present
-        if (Array.isArray(assessmentsFromServer) && assessmentsFromServer.length > 0) {
-          setGradingPolicy((prev) => {
-            const prevIds = (prev?.assessments ?? []).map((a) => a.id).join(",");
-            const newIds = assessmentsFromServer.map((a: any) => a.id).join(",");
-            if (prevIds === newIds) return prev;
-            return { ...(prev ?? { id: gradingId, title: "", passMark: 0, maxScore: 0, assessments: [] }), assessments: assessmentsFromServer };
-          });
+        if (gradingResp?.gradingPolicyId) {
+          try {
+            const policy = await fetchWithErrorHandling(`/api/policies/${gradingResp.gradingPolicyId}`, controller);
+            if (mounted) setGradingPolicy(policy);
+          } catch (err) {
+            console.warn("Failed to fetch grading policy:", err);
+          }
         }
-
-        if (mounted) {
-          setStudentAssessments(Array.isArray(studentAssessmentsRows) ? studentAssessmentsRows : []);
-          setStudentGrades(Array.isArray(grades) ? grades : []);
-        }
-      } catch (err: any) {
-        if (err?.name === "AbortError") {
-          if (mounted) setLoading(false);
-          return;
-        }
-        console.error("Error fetching marks/grades:", err);
-        if (mounted) {
-          setStudentAssessments([]);
-          setStudentGrades([]);
-          await showToastAfterSpinner({ severity: "info", summary: "No Data", detail: "No existing marks or grades found. You can enter new marks." });
-        }
+      } catch (err) {
+        console.error(err);
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
-    void fetchMarksAndGrades();
+    void fetchGrading();
+    return () => { mounted = false; controller.abort(); };
+  }, [gradingId]);
+
+  /* ---------------------------
+     Fetch student assessments & grades for selected class+subject
+  --------------------------- */
+  useEffect(() => {
+    if (!gradingId || !watchedClassId || !watchedSubjectId) return;
+
+    const controller = new AbortController();
+    let mounted = true;
+
+    const fetchGrades = async () => {
+      try {
+        setLoading(true);
+        const payload = await fetchWithErrorHandling(
+          `/api/grade?gradingId=${gradingId}&classId=${watchedClassId}&subjectId=${watchedSubjectId}`,
+          controller
+        );
+
+        if (!mounted) return;
+
+        setStudentAssessments(payload?.studentAssessments ?? []);
+        setStudentGrades(payload?.grades ?? []);
+        if (payload?.assessments) {
+          setGradingPolicy((prev) => ({ ...(prev ?? {}), assessments: payload.assessments }));
+        }
+      } catch (err) {
+        console.warn("Fetch grades failed:", err);
+        setStudentAssessments([]);
+        setStudentGrades([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    void fetchGrades();
     return () => { mounted = false; controller.abort(); };
   }, [gradingId, watchedClassId, watchedSubjectId]);
 
   /* ---------------------------
-     Lookups for quick access
-     --------------------------- */
+     Lookups for fast access
+  --------------------------- */
   const assessmentLookup = useMemo(() => {
     const m = new Map<string, StudentAssessment>();
     for (const sa of studentAssessments) m.set(`${sa.studentId}:${sa.assessmentId}`, sa);
@@ -295,108 +280,32 @@ const Grade: React.FC = () => {
   }, [studentGrades]);
 
   /* ---------------------------
-     Column definitions based on gradingPolicy.assessments
-     --------------------------- */
-  /**
- * Explicit assessment order
- */
-  const ASSESSMENT_ORDER = {
-    CA1: 0,
-    CA2: 1,
-    CA3: 2,
-    Exams: 3,
-  } as const;
-
+     Column definitions
+  --------------------------- */
   const columnDefs = useMemo<ColDef[]>(() => {
-    /**
-     * Sort assessments safely and immutably
-     */
-    const assessments = [...(gradingPolicy?.assessments ?? [])].sort(
-      (a, b) =>
-        (ASSESSMENT_ORDER[a.name as keyof typeof ASSESSMENT_ORDER] ?? 999) -
-        (ASSESSMENT_ORDER[b.name as keyof typeof ASSESSMENT_ORDER] ?? 999)
-    );
-
-    /**
-     * Dynamic assessment columns
-     */
-    const assessmentColumns: ColDef[] = assessments.map((assessment, index) => ({
-      headerName: assessment.name,
-      field: assessment.id,
-      colId: `${assessment.id}-${index}`,
+    const assessments = [...(gradingPolicy?.assessments ?? [])];
+    const assessmentColumns: ColDef[] = assessments.map((a, idx) => ({
+      headerName: a.name,
+      field: a.id,
       editable: true,
-      filter: false,
-      sortable: false,
-
       valueSetter: (params) => {
         const raw = params.newValue;
         const value = typeof raw === "string" ? Number(raw) : raw;
-
-        if (!Number.isFinite(value)) {
-          toast.current?.show({
-            severity: "warn",
-            summary: "Invalid Score",
-            detail: "Please enter a valid numeric score.",
-            life: 3000,
-          });
-          return false;
-        }
-
-        if (value < 0 || value > assessment.maxScore) {
-          toast.current?.show({
-            severity: "warn",
-            summary: "Invalid Score",
-            detail: `Score must be between 0 and ${assessment.maxScore}`,
-            life: 3000,
-          });
-          return false;
-        }
-
-        params.data[assessment.id] = value;
+        if (!Number.isFinite(value) || value < 0 || value > (a.maxScore ?? 100)) return false;
+        params.data[a.id] = value;
         return true;
       },
     }));
 
-    /**
-     * Static + computed columns
-     */
     return [
-      {
-        headerName: "Student Name",
-        field: "name",
-        filter: "agTextColumnFilter",
-        sortable: true,
-      },
-
+      { headerName: "Student Name", field: "name", filter: "agTextColumnFilter", sortable: true },
       ...assessmentColumns,
-
-      {
-        headerName: "Total",
-        field: "serverTotal",
-        filter: "agNumberColumnFilter",
-        sortable: true,
-        valueGetter: (params) => {
-          const computed = assessments.reduce(
-            (sum, a) => sum + (Number(params.data[a.id]) || 0),
-            0
-          );
-          return params.data.serverTotal ?? computed ?? "";
-        },
-      },
-
+      { headerName: "Total", field: "serverTotal", valueGetter: (params) => assessments.reduce((sum, a) => sum + (Number(params.data[a.id]) || 0), 0) },
       {
         headerName: "Grade",
         field: "serverGrade",
-        filter: "agTextColumnFilter",
-        sortable: true,
         valueGetter: (params) => {
-          if (params.data.serverGrade) return params.data.serverGrade;
-
-          const score = assessments.reduce(
-            (sum, a) => sum + (Number(params.data[a.id]) || 0),
-            0
-          );
-
+          const score = assessments.reduce((sum, a) => sum + (Number(params.data[a.id]) || 0), 0);
           if (score >= 70) return "A";
           if (score >= 60) return "B";
           if (score >= 50) return "C";
@@ -405,20 +314,11 @@ const Grade: React.FC = () => {
           return "F";
         },
       },
-
       {
         headerName: "Remark",
         field: "serverRemark",
-        filter: "agTextColumnFilter",
-        sortable: true,
         valueGetter: (params) => {
-          if (params.data.serverRemark) return params.data.serverRemark;
-
-          const score = assessments.reduce(
-            (sum, a) => sum + (Number(params.data[a.id]) || 0),
-            0
-          );
-
+          const score = assessments.reduce((sum, a) => sum + (Number(params.data[a.id]) || 0), 0);
           if (score >= 70) return "Excellent";
           if (score >= 60) return "Very Good";
           if (score >= 50) return "Good";
@@ -427,172 +327,76 @@ const Grade: React.FC = () => {
           return "Fail";
         },
       },
-
-      {
-        headerName: "Position",
-        field: "subjectPosition",
-        filter: "agTextColumnFilter",
-        sortable: true,
-        valueGetter: (params) => params.data.subjectPosition ?? "",
-      },
+      { headerName: "Position", field: "subjectPosition", valueGetter: (params) => params.data.subjectPosition ?? "" },
     ];
   }, [gradingPolicy?.assessments]);
 
-  /* ---------------------------
-     Row data: one row per filtered student
-     --------------------------- */
   const rowData = useMemo(() => {
     if (!filteredStudents.length) return [];
     const assessments = gradingPolicy?.assessments ?? [];
-    return filteredStudents.map((student) => {
-      const row: any = { studentId: student.id, name: `${student.firstname} ${student.othername ?? ""} ${student.surname}`.trim() };
-      assessments.forEach((assessment) => {
-        const key = `${student.id}:${assessment.id}`;
+    return filteredStudents.map((s) => {
+      const row: any = { studentId: s.id, name: `${s.firstname} ${s.othername ?? ""} ${s.surname}`.trim() };
+      assessments.forEach((a) => {
+        const key = `${s.id}:${a.id}`;
         const sa = assessmentLookup.get(key);
-        row[assessment.id] = sa ? sa.score : 0;
+        row[a.id] = sa?.score ?? 0;
       });
-      const sg = studentGradeLookup.get(student.id);
+      const sg = studentGradeLookup.get(s.id);
       row.serverTotal = sg?.score ?? null;
       row.serverGrade = sg?.grade ?? null;
       row.serverRemark = sg?.remark ?? null;
       row.subjectPosition = sg?.subjectPosition ?? null;
-      row.studentGradeId = sg?.id ?? null;
       return row;
     });
   }, [filteredStudents, gradingPolicy?.assessments, assessmentLookup, studentGradeLookup]);
 
   /* ---------------------------
-     Save handler — only sets/clears 'saving' state (loading is used for fetches)
-     --------------------------- */
+     Save handler
+  --------------------------- */
   const onSave = async (data: { classId: string; subjectId: string }) => {
-    const controller = new AbortController();
-    let mounted = true;
+    if (!grading || !gradingPolicy?.assessments) return;
+
     setSaving(true);
+    const gridData: any[] = [];
+    gridRef.current?.api.forEachNode((node) => gridData.push(node.data));
+
+    const studentsPayload = gridData.map((row) => ({
+      studentId: row.studentId,
+      perAssessmentScores: gradingPolicy.assessments!.map((a) => ({ assessmentId: a.id, score: Number(row[a.id] ?? 0) })),
+    }));
 
     try {
-      if (!grading || !gradingPolicy?.assessments || gradingPolicy.assessments.length === 0) {
-        throw new Error("An error occurred. Please ensure grading and assessments are properly set.");
-      }
-
-      const gridData: any[] = [];
-      gridRef.current?.api.forEachNode((node) => gridData.push(node.data));
-
-      const studentsPayload = gridData.map((row) => {
-        const perAssessmentScores = gradingPolicy!.assessments!.map((assessment) => {
-          const raw = row[assessment.id];
-          const score = typeof raw === "number" ? raw : parseFloat(String(raw || "0"));
-          return { assessmentId: assessment.id, score: Number.isFinite(score) ? score : 0 };
-        });
-        return { studentId: row.studentId, perAssessmentScores };
-      });
-
-      const payload = {
-        subjectId: data.subjectId,
-        classId: data.classId,
-        gradingId: grading.id,
-        assessments: gradingPolicy.assessments!.map((a) => a.id),
-        students: studentsPayload,
-      };
-
-      const response = await fetch("/api/grade", {
+      const res = await fetch("/api/grade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
+        body: JSON.stringify({
+          gradingId: grading.id,
+          classId: data.classId,
+          subjectId: data.subjectId,
+          assessments: gradingPolicy.assessments!.map((a) => a.id),
+          students: studentsPayload,
+        }),
       });
-
-      if (!response.ok) {
-        const result = await response.json().catch(() => null);
-        throw new Error(result?.error || "Failed to save students' grades");
-      }
-
-      const resultBody = await response.json().catch(() => null);
-      const returnedGrades: StudentGrade[] = (resultBody?.data ?? resultBody) || [];
-      const returnedAssessments: StudentAssessment[] = (resultBody?.studentAssessments ?? []);
-
-      // hide spinner before toast
-      setSaving(false);
-      await new Promise((r) => setTimeout(r, 120));
-
-      // update per-assessment rows (prefer server returned rows)
-      if (Array.isArray(returnedAssessments) && returnedAssessments.length > 0) {
-        setStudentAssessments(returnedAssessments);
-      } else {
-        const reconstructed: StudentAssessment[] = [];
-        for (const s of studentsPayload) {
-          for (const pa of s.perAssessmentScores) {
-            reconstructed.push({
-              id: undefined,
-              studentId: s.studentId,
-              assessmentId: pa.assessmentId,
-              subjectId: data.subjectId,
-              classId: data.classId,
-              gradingId: grading.id,
-              score: pa.score,
-            });
-          }
-        }
-        setStudentAssessments(reconstructed);
-      }
-
-      setStudentGrades(Array.isArray(returnedGrades) ? returnedGrades : []);
-      await showToastAfterSpinner({ severity: "success", summary: "Success", detail: "Students' grades saved successfully" });
-
-      // best-effort refresh aggregated grades and assessments
-      try {
-        setSaving(true);
-        const refresh = await fetchWithErrorHandling(`/api/grade?gradingId=${grading.id}&classId=${data.classId}&subjectId=${data.subjectId}`, controller);
-        if (refresh) {
-          if (Array.isArray(refresh.grades)) setStudentGrades(refresh.grades);
-          if (Array.isArray(refresh.studentAssessments) && refresh.studentAssessments.length) setStudentAssessments(refresh.studentAssessments);
-          if (Array.isArray(refresh.assessments) && refresh.assessments.length) {
-            setGradingPolicy((prev) => ({ ...(prev ?? { id: grading.id, title: "", passMark: 0, maxScore: 0, assessments: [] }), assessments: refresh.assessments }));
-          }
-        }
-      } catch (err) {
-        console.warn("Post-save refresh failed:", err);
-      } finally {
-        if (mounted) setSaving(false);
-      }
+      if (!res.ok) throw new Error("Failed to save grades");
+      const result = await res.json();
+      setStudentAssessments(result.studentAssessments ?? []);
+      setStudentGrades(result.data ?? []);
+      toast.current?.show({ severity: "success", summary: "Success", detail: "Grades saved successfully" });
     } catch (err: any) {
-      if (err?.name === "AbortError") return;
-      setSaving(false);
-      await new Promise((r) => setTimeout(r, 80));
-      console.error("Save error:", err);
-      toast.current?.show({ severity: "error", summary: "Error", detail: err.message || "Failed to save grades", life: 3000 });
+      toast.current?.show({ severity: "error", summary: "Error", detail: err.message ?? "Failed to save grades" });
     } finally {
-      if (mounted) setSaving(false);
+      setSaving(false);
     }
-
-    return () => { mounted = false; controller.abort(); };
   };
 
-  /* ---------------------------
-     Options for dropdowns (memoized)
-     --------------------------- */
-  const classOptions = useMemo(() => classes.sort((a, b) => a.name.localeCompare(b.name)).map((cls) => ({ label: cls.name, value: cls.id })), [classes]);
-  const subjectOptions = useMemo(() => subjects.sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({ label: s.name, value: s.id })), [subjects]);
+  const classOptions = useMemo(() => fetchedClasses?.map((c) => ({ label: c.name, value: c.id })) ?? [], [fetchedClasses]);
+  const subjectOptions = useMemo(() => fetchedSubjects?.map((s) => ({ label: s.name, value: s.id })) ?? [], [fetchedSubjects]);
 
-  /* ---------------------------
-     Full-page loading UI (rendered only while fetching initial or dependent data)
-     --------------------------- */
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center min-h-screen"><Spinner visible={loading} onHide={() => setLoading(false)} /></div>;
 
-  /* ---------------------------
-     Main render — overlay spinner appears only while saving
-     --------------------------- */
   return (
     <section className="w-[96%] bg-white mx-auto my-4 rounded-md shadow-md">
       <Toast ref={toast} />
-      {/* overlay spinner only during saving */}
       <Spinner visible={saving} onHide={() => setSaving(false)} />
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200 p-4">
@@ -635,7 +439,7 @@ const Grade: React.FC = () => {
           </div>
         </div>
 
-        {watchedClassId && gradingPolicy?.assessments && gradingPolicy.assessments.length ? (
+        {watchedClassId && gradingPolicy?.assessments?.length ? (
           <>
             <div>
               <InputText value={quickFilter} onChange={(e) => setQuickFilter((e.target as HTMLInputElement).value)} placeholder="Search students..." className="w-full p-2 border rounded-md" />
@@ -647,17 +451,13 @@ const Grade: React.FC = () => {
                 rowData={rowData}
                 defaultColDef={{ resizable: true, sortable: true, filter: true, suppressMovable: true }}
                 quickFilterText={quickFilter}
-                maintainColumnOrder={false}
-                pagination
-                paginationPageSize={20}
-                paginationPageSizeSelector={[5, 10, 20, 50, 100]}
-                suppressClickEdit={false}
-                theme="legacy"
+                domLayout="autoHeight"
+                suppressRowClickSelection={true}
               />
             </div>
           </>
         ) : (
-          <p className="text-gray-500 text-center">{watchedClassId ? "No assessments available for this grading policy." : "Please select a class to view and grade students."}</p>
+          <p className="text-gray-500 mt-4">Select class and subject to view students.</p>
         )}
       </form>
     </section>
