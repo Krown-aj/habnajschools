@@ -316,9 +316,9 @@ const Grade: React.FC = () => {
   --------------------------- */
   const sortedAssessments = useMemo(() => {
     if (!gradingPolicy?.assessments) return [];
-    const order: Record<string, number> = { CA1: 0, CA2: 1, CA3: 2, Exams: 3 };
-    return [...gradingPolicy.assessments].sort(
-      (a, b) => (order[a.name] ?? 999) - (order[b.name] ?? 999)
+
+    return [...gradingPolicy.assessments].sort((a, b) =>
+      (a.name?.toLowerCase() || "").localeCompare(b.name?.toLowerCase() || "")
     );
   }, [gradingPolicy?.assessments]);
 
