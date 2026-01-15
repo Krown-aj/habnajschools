@@ -35,10 +35,10 @@ function generateRemark(average: number, passMark?: number | null): string {
         baseRemark = "Very good — stay consistent and improve steadily.";
     } else if (avg >= 50) {
         baseRemark = "Good effort — focus on practice to reach the next band.";
-    } else if (avg >= 45) {
-        baseRemark = "Pass — maintain effort and strengthen weak areas.";
     } else if (avg >= 40) {
-        baseRemark = "Pass — you're close, review difficult topics regularly.";
+        baseRemark = "Pass — maintain effort and strengthen weak areas.";
+    } else if (avg >= 35) {
+        baseRemark = "Fair — you're close, review difficult topics regularly.";
     } else {
         baseRemark = "Needs improvement — seek support and practise consistently.";
     }
