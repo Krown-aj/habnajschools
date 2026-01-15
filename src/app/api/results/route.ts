@@ -19,7 +19,7 @@ function ordinal(n: number): string {
  * Logic:
  *  - Excellent / Very Good -> warm, encouraging praise.
  *  - Good / Pass -> encouraging, focus on improvement.
- *  - Fair -> cautious but motivating guidance.
+ *  - Pass -> cautious but motivating guidance.
  *  - Fail / Below pass -> gentle, constructive encouragement and suggestion to seek help.
  *
  * If passMark provided and student is below it an extra gentle suggestion is appended.
@@ -38,7 +38,7 @@ function generateRemark(average: number, passMark?: number | null): string {
     } else if (avg >= 45) {
         baseRemark = "Pass — maintain effort and strengthen weak areas.";
     } else if (avg >= 40) {
-        baseRemark = "Fair — you're close, review difficult topics regularly.";
+        baseRemark = "Pass — you're close, review difficult topics regularly.";
     } else {
         baseRemark = "Needs improvement — seek support and practise consistently.";
     }

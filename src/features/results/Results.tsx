@@ -580,8 +580,8 @@ const Results: React.FC = () => {
             const footerBase = doc.internal.pageSize.getHeight() - 30;
             doc.setFontSize(7);
             doc.setFont('helvetica', 'italic');
-            doc.text('Keys: A: Excellent, B: Very Good, C: Good, D: Fair, F: Fail', margin, footerBase);
-            doc.text('Keys: 5: Excellent, 4: Very Good, 3: Good, 2: Fair, 1: Poor', margin, footerBase + 5);
+            doc.text('Keys: A: Excellent, B: Very Good, C: Good, D: Pass, F: Fail', margin, footerBase);
+            doc.text('Keys: 5: Excellent, 4: Very Good, 3: Good, 2: Pass, 1: Poor', margin, footerBase + 5);
 
             const footerY = doc.internal.pageSize.getHeight() - 12;
             doc.setFontSize(8);

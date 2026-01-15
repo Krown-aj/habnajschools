@@ -55,7 +55,7 @@ export const getTeacherRemark = (average: number | undefined | null) => {
     if (avg >= 70) return "Excellent work — keep pushing with extra challenges.";
     if (avg >= 60) return "Strong performance — refine weak areas to excel further.";
     if (avg >= 50) return "Good effort — continue steady revision and practice.";
-    if (avg >= 45) return "Fair result — improve consistency and review weak topics.";
+    if (avg >= 45) return "Pass result — improve consistency and review weak topics.";
     if (avg >= 40) return "Needs improvement — focus on core concepts and revision.";
     return "Below expectation — seek support and follow a guided study plan.";
 };

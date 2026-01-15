@@ -429,7 +429,7 @@ const Grade: React.FC = () => {
           if (score >= 60) return "Very Good";
           if (score >= 50) return "Good";
           if (score >= 45) return "Pass";
-          if (score >= 40) return "Fair";
+          if (score >= 40) return "Pass";
           return "Fail";
         },
       },

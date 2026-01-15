@@ -111,7 +111,7 @@ const ManagementAboutOptimized: React.FC = () => {
                                 <h2 className="text-xl font-semibold text-gray-900">{MANAGEMENT.director.name}</h2>
                                 <p className="mt-2 text-sm text-gray-700" style={{ textAlign: "justify" }}>
                                     The Managing Director, of Habnaj International Schools, {MANAGEMENT.director.name}, is a holder of {MANAGEMENT.director.qualification} and served as an Education Officer with the
-                                    Bauchi State Ministry of Education. She continued her career with the Ministry of Women Affairs and Child Development, retiring as Deputy
+                                    Bauchi State Ministry of Education. She continued her career with the Ministry of Women AfPasss and Child Development, retiring as Deputy
                                     Director Child Development Specialist in 2025. {MANAGEMENT.director.name} is passionate about nurturing morally, spiritually and socially upright children.
                                 </p>
 
