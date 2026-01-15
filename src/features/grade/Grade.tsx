@@ -166,8 +166,6 @@ const Grade: React.FC = () => {
 
         if (!mounted) return;
 
-        console.log("Initial fetch results:", { classesResponse, });
-
         setGrading(gradingResponse);
         setClasses(classesResponse);
         setSubjects(subjectsResponse);
@@ -200,25 +198,32 @@ const Grade: React.FC = () => {
      --------------------------- */
   useEffect(() => {
     if (watchedClassId) {
-      const selectedClass = classes.find(c => c.id === watchedClassId);
-      const filtered = allStudents.filter((s) => s.class?.id === watchedClassId);
-      const filteredSubjects = subjects.filter((subject: any) => subject.section === selectedClass?.section);
+      const filtered = allStudents.filter((s) => s.class.id === watchedClassId).sort((a, b) => {
+        const firstnameA = a.firstname?.toLowerCase() || "";
+        const firstnameB = b.firstname?.toLowerCase() || "";
+        if (firstnameA < firstnameB) return -1;
+        if (firstnameA > firstnameB) return 1;
 
+        return 0;
+      });
+      const selectedClass = classes.find(c => c.id === watchedClassId)
+      const filteredSubjects = subjects.filter((subject: any) => subject.section === selectedClass?.section).sort((a: any, b: any) =>
+        (a.name?.toLowerCase() || "").localeCompare(b.name?.toLowerCase() || "")
+      );
       setFilteredStudents(filtered);
-      setSubjects(filteredSubjects);
+      setSubjects(filteredSubjects)
       setValue("subjectId", "");
       setStudentAssessments([]);
       setStudentGrades([]);
+      // ensure loading reset in case it was left true
       setLoading(false);
     } else {
       setFilteredStudents([]);
-      setSubjects([]);
       setStudentAssessments([]);
       setStudentGrades([]);
       setLoading(false);
     }
-  }, [watchedClassId, allStudents, subjects, classes, setValue]);
-
+  }, [watchedClassId, allStudents, setValue]);
 
   /* ---------------------------
      When class + subject selected: fetch aggregated grades + per-assessment rows + assessment defs
