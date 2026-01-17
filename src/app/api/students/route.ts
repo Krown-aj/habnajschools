@@ -27,47 +27,70 @@ const generateAdmissionNumber = (
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    // Route protected
+    // Protect route
     const validation = await validateSession();
     if (validation.error) return validation.error;
 
     const url = new URL(request.url);
-    const classParam = url.searchParams.get('classid');
-    const sectionParam = url.searchParams.get('section');
-    const parentParam = url.searchParams.get('parentid');
-    const teacherParam = url.searchParams.get('teacherid');
+    const classParam = url.searchParams.get("classid");
+    const sectionParam = url.searchParams.get("section");
+    const parentParam = url.searchParams.get("parentid");
+    const teacherParam = url.searchParams.get("teacherid");
 
     const whereClauses: Prisma.StudentWhereInput[] = [];
 
-    // classid filter
-    if (classParam) whereClauses.push({ classid: classParam });
+    /* -------------------- Base filters -------------------- */
 
-    // parentid filter
-    if (parentParam) whereClauses.push({ parentid: parentParam });
-
-    // If teacherid provided, apply teacher-specific logic:
-    if (teacherParam) {
-      // get teacher's section
-      const teacherRecord = await prisma.teacher.findUnique({
-        where: { id: teacherParam },
-        select: { section: true }
-      })
-
-      whereClauses.push({ section: teacherRecord?.section })
-
-      whereClauses.push({
-        OR: [
-          { class: { formmasterid: teacherParam } },
-          { class: { lessons: { some: { teacherid: teacherParam } } } },
-        ],
-      });
-
-    } else {
-      // No teacher param: if section provided, apply it as a filter
-      if (sectionParam) whereClauses.push({ section: sectionParam });
+    if (classParam) {
+      whereClauses.push({ classid: classParam });
     }
 
-    const where: Prisma.StudentWhereInput = whereClauses.length > 0 ? { AND: whereClauses } : {};
+    if (parentParam) {
+      whereClauses.push({ parentid: parentParam });
+    }
+
+    /* -------------------- Teacher-specific logic -------------------- */
+
+    if (teacherParam) {
+      const teacher = await prisma.teacher.findUnique({
+        where: { id: teacherParam },
+        select: { section: true },
+      });
+
+      if (!teacher) {
+        return NextResponse.json(
+          { message: "Teacher not found" },
+          { status: 404 }
+        );
+      }
+
+      if (!teacher.section) {
+        return NextResponse.json(
+          { message: "Teacher has no assigned section" },
+          { status: 400 }
+        );
+      }
+
+      /**
+       * STRICT rule:
+       * - student.section must match teacher.section
+       * - teacher must be related to the class
+       */
+      whereClauses.push({
+        section: {
+          equals: teacher.section,
+          mode: "insensitive",
+        },
+      });
+    } else {
+      // Non-teacher requests can filter by section freely
+      if (sectionParam) {
+        whereClauses.push({ section: sectionParam });
+      }
+    }
+
+    const where: Prisma.StudentWhereInput =
+      whereClauses.length > 0 ? { AND: whereClauses } : {};
 
     const students = await prisma.student.findMany({
       where,
@@ -117,12 +140,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     return successResponse({ data: students });
   } catch (error) {
-    return handleError(error, 'Failed to fetch students');
+    return handleError(error, "Failed to fetch students");
   }
 }
 
