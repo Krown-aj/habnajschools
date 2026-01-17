@@ -47,19 +47,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // If teacherid provided, apply teacher-specific logic:
     if (teacherParam) {
-      if (sectionParam) {
-        // Teacher requested a specific section -> include ALL students in that section
-        whereClauses.push({ section: sectionParam });
-      } else {
-        // No section: return students who belong to classes where the teacher is
-        // either the formmaster OR has lessons.
-        whereClauses.push({
-          OR: [
-            { class: { formmasterid: teacherParam } },
-            { class: { lessons: { some: { teacherid: teacherParam } } } },
-          ],
-        });
-      }
+      // get teacher's section
+      const teacherRecord = await prisma.teacher.findUnique({
+        where: { id: teacherParam },
+        select: { section: true }
+      })
+
+      whereClauses.push({ section: teacherRecord?.section })
+
+      whereClauses.push({
+        OR: [
+          { class: { formmasterid: teacherParam } },
+          { class: { lessons: { some: { teacherid: teacherParam } } } },
+        ],
+      });
+
     } else {
       // No teacher param: if section provided, apply it as a filter
       if (sectionParam) whereClauses.push({ section: sectionParam });
