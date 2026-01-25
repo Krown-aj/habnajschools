@@ -855,7 +855,7 @@ const Results: React.FC = () => {
                         <Column field="admissionnumber" header="Admission No." sortable />
                         <Column field="studentName" header="Student Name" sortable />
                         <Column field="average" header="Average" sortable body={(r) => (r.average != null ? Number(r.average).toFixed(2) : "-")} />
-                        <Column field="overallPosition" header="Class Position" body={statusBody} sortable />
+                        {!parent && <Column field="overallPosition" header="Class Position" body={statusBody} sortable />}
                         {/* <Column field="createdAt" header="Date" body={(row: ReportCardRow) => (row.createdAt ? moment(row.createdAt).format("DD MMM YYYY") : "")} /> */}
                         <Column body={actionBody} header="Actions" style={{ textAlign: "center", width: "4rem" }} />
                     </DataTable>
