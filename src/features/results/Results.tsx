@@ -11,10 +11,8 @@ import React, {
 import { FaTrash, FaEye } from "react-icons/fa";
 import { AiOutlinePrinter, AiOutlineFileZip } from "react-icons/ai";
 import { Award } from "lucide-react";
-
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-
 import { DataTable } from "primereact/datatable";
 import type {
     DataTableFilterMeta,
@@ -27,16 +25,13 @@ import { Dropdown } from "primereact/dropdown";
 import { OverlayPanel } from "primereact/overlaypanel";
 import { FilterMatchMode } from "primereact/api";
 import { Toast } from "primereact/toast";
-
-import moment from "moment";
-
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
-
 import Spinner from "@/components/Spinner/Spinner";
 import { getTeacherRemark, toOrdinal, parseOrdinal } from "@/lib/utils";
+import { CONTACT } from "@/constants";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -45,12 +40,14 @@ type GradingDto = {
     id: string;
     title?: string;
     session?: string;
-    term?: string
+    term?: string;
+    section: string;
 };
 
 type ClassDto = {
     id: string;
-    name: string
+    name: string;
+    section: string;
 };
 
 type ReportCardRow = {
@@ -65,7 +62,7 @@ type ReportCardRow = {
     _raw?: any;
 };
 
-const PROFILE_PLACEHOLDER = "/assets/profile.png";
+const PROFILE_PLACEHOLDER = "/assets/logo.png";
 
 /* -------------------------------------------------------------------------- */
 /* COMPONENT                                                                  */
@@ -98,6 +95,7 @@ const Results: React.FC = () => {
     });
 
     const role = session?.user?.role || "Guest";
+    const parent = role.toLocaleLowerCase('parent');
 
     const show = useCallback(
         (
@@ -144,9 +142,15 @@ const Results: React.FC = () => {
         const load = async () => {
             setLoading(true);
             try {
+                const classUrl =
+                    role?.toLocaleLowerCase() === "parent"
+                        ? `/api/classes?parentid=${session?.user.id}`
+                        : "/api/classes";
+                const gradingUrl = "/api/gradings";
+
                 const [gRes, cRes] = await Promise.all([
-                    fetch("/api/gradings", { signal: controller.signal }),
-                    fetch("/api/classes", { signal: controller.signal })]);
+                    fetch(gradingUrl, { signal: controller.signal }),
+                    fetch(classUrl, { signal: controller.signal })]);
 
                 if (!gRes.ok) throw new Error(`Failed to load gradings (${gRes.status})`);
                 if (!cRes.ok) throw new Error(`Failed to load classes (${cRes.status})`);
@@ -174,9 +178,24 @@ const Results: React.FC = () => {
     /* FETCH RESULTS                                                          */
     /* ---------------------------------------------------------------------- */
     const findGrading = useCallback(() => {
-        if (!selectedSession || !selectedTerm) return undefined;
-        return gradings.find((g) => String(g.session) === String(selectedSession) && String(g.term) === String(selectedTerm));
-    }, [gradings, selectedSession, selectedTerm]);
+        if (!selectedSession || !selectedTerm || !selectedClass) return undefined;
+
+        const selectedCls = classes.find(c => c.id === selectedClass);
+        if (!selectedCls?.section) return undefined;
+
+        return gradings.find(g =>
+            g.session === selectedSession &&
+            g.term === selectedTerm &&
+            g.section.toLocaleLowerCase() === selectedCls.section.toLocaleLowerCase()
+        );
+    }, [
+        gradings,
+        classes,
+        selectedClass,
+        selectedSession,
+        selectedTerm,
+    ]);
+
 
     const transformApiPayloadToRows = useCallback((payload: any): ReportCardRow[] => {
         if (!Array.isArray(payload) || payload.length === 0) return [];
@@ -270,10 +289,11 @@ const Results: React.FC = () => {
     }, [deleteApi, show]);
 
     const handleView = useCallback((row: ReportCardRow) => {
-        if (!row.id) return;
-        router.push(`/dashboard/${role}/report-cards/${row.id}/view`);
+        const grading = findGrading();
+        if (!grading?.id || !row.studentId || !selectedClass || !selectedSession || !selectedTerm) return;
+        router.push(`/dashboard/${role}/results/${encodeURIComponent(grading.id)}&studentId=${encodeURIComponent(row.studentId)}&classId=${encodeURIComponent(selectedClass)}&session=${encodeURIComponent(selectedSession)}&term=${encodeURIComponent(selectedTerm)}/view`);
         panel.current?.hide();
-    }, [router, role]);
+    }, [router, role, selectedTerm, selectedClass, selectedSession]);
 
     //Utility: convert image URL to based64
     const getBase64ImageFromUrl = useCallback(async (url?: string | null, place_holder?: string | null) => {
@@ -411,7 +431,7 @@ const Results: React.FC = () => {
             doc.setFontSize(9);
             doc.setFont("helvetica", "normal");
             doc.text("Plot D 12, Sam Njoma Street, GRA Bauchi, Bauchi State.", pageWidth / 2, 24, { align: "center" });
-            doc.text("Email: habnaj2021international@gmail.com, Phone: ", pageWidth / 2, 28, { align: "center" });
+            doc.text(`Email: ${CONTACT.email}, Phone: ${CONTACT.phone}`, pageWidth / 2, 28, { align: "center" });
 
             doc.setLineWidth(0.4);
             doc.line(margin, 34, pageWidth - margin, 34);
@@ -420,13 +440,13 @@ const Results: React.FC = () => {
             const gradingEntry = row._raw?.gradingEntry ?? {};
             const term = row._raw?.term ?? row._raw?.grading?.term ?? selectedTerm;
             const session = row._raw?.session ?? row._raw?.grading?.session ?? selectedSession;
-            const nextTermBegins = gradingEntry?.nextTermBegins ?? "January 15, 2024";
+            const nextTermBegins = gradingEntry?.nextTermBegins ?? "January 19, 2026";
             const infoStartY = 36;
             autoTable(doc, {
                 startY: infoStartY,
                 theme: "grid",
                 head: [["Student", "Admission No.", "Class", "Term", "Session", "Next Term Begins"]],
-                body: [[row.studentName ?? "-", row.admissionnumber ?? "-", row.class ?? "-", String(term ?? "-"), String(session ?? "-"), String(nextTermBegins ?? "-")]],
+                body: [[row.studentName?.toLocaleUpperCase() ?? "-", row.admissionnumber ?? "-", row.class ?? "-", String(term ?? "-"), String(session ?? "-"), String(nextTermBegins ?? "-")]],
                 styles: { fontSize: 9, cellPadding: 2 },
                 headStyles: { fillColor: [22, 160, 133] },
                 didParseCell: (data) => {
@@ -500,7 +520,7 @@ const Results: React.FC = () => {
                         t.name,
                         t.score
                     ]),
-                    color: [243, 156, 18]
+                    color: [22, 160, 133]
                 });
             if (psychomotor.length)
                 domains.push({
@@ -509,7 +529,7 @@ const Results: React.FC = () => {
                         t.name,
                         t.score
                     ]),
-                    color: [243, 156, 18]
+                    color: [52, 152, 219]
                 });
             if (behavioural.length)
                 domains.push({
@@ -518,18 +538,18 @@ const Results: React.FC = () => {
                         t.name,
                         t.score
                     ]),
-                    color: [243, 156, 18]
+                    color: [30, 64, 175]
                 });
 
             domains.push({
                 title: "Result Summary",
                 rows: [
-                    ["Students in Class", studentCount],
-                    ["Class Position", String(gradingEntry?.grades?.classPosition ?? row.overallPosition ?? "-")],
+                    /* ["Students in Class", studentCount],
+                    ["Class Position", String(gradingEntry?.grades?.classPosition ?? row.overallPosition ?? "-")], */
                     ["Total Score", String(gradingEntry?.grades?.totalScore ?? "-")],
                     ["Average Score", gradingEntry?.grades?.averageScore != null ? String(Number(gradingEntry.grades.averageScore).toFixed(2)) : (row.average != null ? String(Number(row.average).toFixed(2)) : "-")],
                 ],
-                color: [243, 156, 18]
+                color: [41, 128, 185]
             });
 
             const count = domains.length;
@@ -564,7 +584,7 @@ const Results: React.FC = () => {
             const teacherGeneratedRemark = generateTeacherRemark(row.average);
 
             autoTable(doc, {
-                startY: commentStartY + 25,
+                startY: commentStartY + 45,
                 theme: "grid",
                 head: [["Remarker", "Remark"]],
                 body: [
@@ -573,7 +593,7 @@ const Results: React.FC = () => {
                 ],
                 styles: { fontSize: 7, cellPadding: 2 },
                 margin: { left: margin, right: margin },
-                headStyles: { fillColor: [243, 156, 18] },
+                headStyles: { fillColor: [41, 128, 185] },
             });
 
             // Keys and footer placed inside page bounds
@@ -583,10 +603,10 @@ const Results: React.FC = () => {
             doc.text('Keys: A: Excellent, B: Very Good, C: Good, D: Pass, F: Fail', margin, footerBase);
             doc.text('Keys: 5: Excellent, 4: Very Good, 3: Good, 2: Pass, 1: Poor', margin, footerBase + 5);
 
-            const footerY = doc.internal.pageSize.getHeight() - 12;
+            /* const footerY = doc.internal.pageSize.getHeight() - 12;
             doc.setFontSize(8);
             doc.setFont("helvetica", "normal");
-            doc.text(`Generated on: ${moment().format("DD MMM YYYY, HH:mm")}`, margin, footerY);
+            doc.text(`Generated on: ${moment().format("DD MMM YYYY, HH:mm")}`, margin, footerY); */
 
             return doc;
         }, [buildSubjectRowsFromEntry, getBase64ImageFromUrl, groupTraitsByCategory, generateTeacherRemark, selectedSession, selectedTerm]);
@@ -620,7 +640,8 @@ const Results: React.FC = () => {
                 // eslint-disable-next-line no-await-in-loop
                 await buildStudentPdf(doc, rows[i], i, rows.length, sharedCols, subjectStatsMap, studentCount);
             }
-            const filename = `${selectedClass || "report_cards"}_${selectedSession || "session"}_${selectedTerm || "term"}.pdf`.replace(/\s+/g, "_");
+            const className = classes.find(c => c.id === selectedClass)?.name
+            const filename = `${className || "report_cards"}_${selectedSession || "session"}_${selectedTerm || "term"}.pdf`.replace(/\s+/g, "_");
             doc.save(filename);
             show("success", "PDF ready", `Downloaded ${filename}`);
         } catch (err: any) {
@@ -629,7 +650,7 @@ const Results: React.FC = () => {
         } finally {
             setProcessing(false);
         }
-    }, [buildStudentPdf, normalizeAssessmentName, subjectStats, selectedClass, selectedSession, selectedTerm, show]);
+    }, [buildStudentPdf, normalizeAssessmentName, subjectStats, selectedClass, classes, selectedSession, selectedTerm, show]);
 
     const generateIndividualPdfBlobs = useCallback(async (rows: ReportCardRow[]) => {
         const blobs: { name: string; blob: Blob }[] = [];
@@ -678,7 +699,8 @@ const Results: React.FC = () => {
             const pdfs = await generateIndividualPdfBlobs(results);
             for (const p of pdfs) zip.file(p.name, p.blob);
             const content = await zip.generateAsync({ type: "blob" });
-            const zipName = `${selectedClass || "report_cards"}_${selectedSession || "session"}_${selectedTerm || "term"}.zip`.replace(/\s+/g, "_");
+            const className = classes.find(c => c.id === selectedClass)?.name
+            const zipName = `${className || "report_cards"}_${selectedSession || "session"}_${selectedTerm || "term"}.zip`.replace(/\s+/g, "_");
             saveAs(content, zipName);
             show("success", "ZIP ready", `Downloaded ${zipName}`);
         } catch (err: any) {
@@ -687,7 +709,7 @@ const Results: React.FC = () => {
         } finally {
             setProcessing(false);
         }
-    }, [results, selectedClass, selectedSession, selectedTerm, generateIndividualPdfBlobs, show]);
+    }, [results, selectedClass, classes, selectedSession, selectedTerm, generateIndividualPdfBlobs, show]);
 
     const handleDownloadSinglePdf = useCallback(async (row?: ReportCardRow) => {
         if (!row) return;
@@ -723,11 +745,18 @@ const Results: React.FC = () => {
         }
     }, [buildStudentPdf, normalizeAssessmentName, results, show, subjectStats]);
 
-    const contextMenuItems = useMemo(() => [
-        { label: "View", icon: <FaEye className="inline-block mr-2" />, command: (r: ReportCardRow) => handleView(r) },
-        { label: "Download PDF", icon: <AiOutlinePrinter className="inline-block mr-2" />, command: (r: ReportCardRow) => handleDownloadSinglePdf(r) },
-        { label: "Delete", icon: <FaTrash className="inline-block mr-2" />, command: (r: ReportCardRow) => confirmDelete([r.id!]) },
-    ], [handleView, handleDownloadSinglePdf, confirmDelete]);
+    const contextMenuItems = useMemo(() => {
+        if (parent) {
+            return [
+                { label: "Download PDF", icon: <AiOutlinePrinter className="inline-block mr-2" />, command: (r: ReportCardRow) => handleDownloadSinglePdf(r) },
+            ]
+        }
+        return [
+            { label: "View", icon: <FaEye className="inline-block mr-2" />, command: (r: ReportCardRow) => handleView(r) },
+            { label: "Download PDF", icon: <AiOutlinePrinter className="inline-block mr-2" />, command: (r: ReportCardRow) => handleDownloadSinglePdf(r) },
+            { label: "Delete", icon: <FaTrash className="inline-block mr-2" />, command: (r: ReportCardRow) => confirmDelete([r.id!]) },
+        ]
+    }, [handleView, handleDownloadSinglePdf, confirmDelete, parent]);
 
     const actionBody = useCallback((row: ReportCardRow) => (
         <Button
@@ -795,7 +824,7 @@ const Results: React.FC = () => {
                         </div>
 
                         <div className="flex gap-2 mt-3">
-                            {results && results.length > 0 && (
+                            {(results && results.length > 0 && !parent) && (
                                 <>
                                     <Button label="Download PDF" icon={<AiOutlinePrinter />} onClick={() => handleDownloadAllPdf()} loading={processing} />
                                     <Button label="Download ZIP" icon={<AiOutlineFileZip />} onClick={() => handleDownloadZip()} loading={processing} />

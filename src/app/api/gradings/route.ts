@@ -7,7 +7,7 @@ import { Terms } from '@/generated/prisma';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
-        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER]);
+        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER, UserRole.MANAGEMENT, UserRole.PARENT]);
         if (validation.error) return validation.error;
 
         const { searchParams } = new URL(request.url);
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
-        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
+        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN,]);
         if (validation.error) return validation.error;
 
         const bodyValidation = await validateRequestBody(request, gradingSchema);

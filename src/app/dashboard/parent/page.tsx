@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useMemo, useCallback, useRef, useState } from "react";
 import { TrendingUp } from "lucide-react";
 
 import CountChartContainer from "@/components/Charts/CountChartContainer";
@@ -13,101 +13,58 @@ import ImageView from "@/components/ImageView/ImageView";
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
 
-interface StudentPreview {
-    id: string;
-    admissionnumber?: string | null;
-    firstname?: string | null;
-    surname?: string | null;
-    othername?: string | null;
-    birthday?: string | null;
-    email?: string | null;
-    phone?: string | null;
-    gender?: string | null;
-    avarta?: string | null;
+import { useGetStudents } from "@/hooks/useStudents";
+import type { Student as StudentType } from "@/generated/prisma";
+
+interface StudentPreview extends StudentType {
     class?: { id?: string | null; name?: string | null } | null;
-    active?: boolean | null;
 }
 
-const Parent = () => {
+const Parent: React.FC = () => {
     const { data: session, status } = useSession();
     const router = useRouter();
 
-    const [students, setStudents] = useState<StudentPreview[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const toastRef = useRef<HTMLDivElement>(null);
 
-    const searchParams = useMemo(() => {
-        if (typeof window !== "undefined") return new URLSearchParams(window.location.search);
-        return new URLSearchParams();
-    }, []);
+    // Parent ID from session
+    const parentId = session?.user?.id;
 
-    const fetchedRef = useRef(false);
+    // Fetch students via hook
+    const { data: studentsData, isLoading, error } = useGetStudents({
+        parentid: parentId || undefined,
+    });
 
-    const fetchStudents = useCallback(async () => {
-        if (!session) return;
+    // Map students and add fullname & className
+    const students: StudentPreview[] = useMemo(() => {
+        if (!studentsData) return [];
 
-        fetchedRef.current = true;
-        setLoading(true);
-        setError(null);
-
-        try {
-            const res = await fetch(`/api/students`, { method: "GET", headers: { "Content-Type": "application/json" } });
-
-            if (!res.ok) {
-                const txt = await res.text().catch(() => "");
-                throw new Error(`Students fetch failed: ${res.status} ${txt}`);
-            }
-
-            const json = await res.json();
-            const data = json?.data ?? json?.students ?? json;
-
-            setStudents(Array.isArray(data) ? data : []);
-        } catch (err) {
-            console.error("Error fetching students:", err);
-            setError(err instanceof Error ? err.message : "Failed to load students");
-            setStudents([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [session]);
-
-    useEffect(() => {
-        if (status === "loading") return;
-
-        if (!session) {
-            router.push("/auth/signin");
-            return;
-        }
-
-        if (session.user?.role !== "parent") {
-            router.push(`/dashboard/${session.user?.role}`);
-            return;
-        }
-
-        if (!fetchedRef.current) fetchStudents();
-    }, [status, session, router, fetchStudents]);
+        return studentsData.map((s) => ({
+            ...s,
+            fullname: `${s.firstname ?? ""} ${s.othername ?? ""} ${s.surname ?? ""}`.replace(/\s+/g, " ").trim(),
+            className: (s as any).class?.name ?? "Not assigned",
+        }));
+    }, [studentsData]);
 
     const studentsByGender = useMemo(() => {
-        const map = students.reduce<Record<string, number>>((acc, s) => {
-            const g = (s.gender || "Unknown").toString();
-            acc[g] = (acc[g] || 0) + 1;
-            return acc;
-        }, {});
-
-        return Object.entries(map).map(([gender, count]) => ({ gender, _count: { _all: count } }));
+        return Object.entries(
+            students.reduce<Record<string, number>>((acc, s) => {
+                const gender = s.gender || "Unknown";
+                acc[gender] = (acc[gender] || 0) + 1;
+                return acc;
+            }, {})
+        ).map(([gender, count]) => ({ gender, _count: { _all: count } }));
     }, [students]);
 
-    // Renderers for DataTable
+    // Renderers
+    const nameBody = useCallback(
+        (row: StudentPreview) =>
+            `${row.firstname ?? ""} ${row.othername ? row.othername + " " : ""}${row.surname ?? ""}`.trim(),
+        []
+    );
 
-    const nameBody = (row: StudentPreview) =>
-        `${row.firstname ?? ""} ${row.othername ? row.othername + " " : ""}${row.surname ?? ""}`.trim();
-
-    const avatarBody = (row: StudentPreview) => {
-        // Prepare a ui-avatars placeholder from name
+    const avatarBody = useCallback((row: StudentPreview) => {
         const displayName = `${row.firstname ?? ""} ${row.surname ?? ""}`.trim() || "Student";
         const placeholder = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0D8ABC&color=fff&size=128`;
-
-        // If avarta exists use it, otherwise undefined so ImageView uses placeholder prop
         const avatarPath = row.avarta && row.avarta.trim() !== "" ? row.avarta : undefined;
 
         return (
@@ -123,9 +80,10 @@ const Parent = () => {
                 />
             </div>
         );
-    };
+    }, []);
 
-    if (status === "loading" || loading) {
+    // Redirect logic
+    if (status === "loading" || isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
@@ -136,35 +94,22 @@ const Parent = () => {
         );
     }
 
-    if (!session || session.user?.role !== "parent") return null;
-
-    if (error) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                <div className="text-center">
-                    <div className="text-red-500 text-6xl mb-4">⚠️</div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Dashboard Error</h2>
-                    <p className="text-gray-600 mb-4">{error}</p>
-                    <button
-                        onClick={() => {
-                            fetchedRef.current = false;
-                            fetchStudents();
-                        }}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        Retry
-                    </button>
-                </div>
-            </div>
-        );
+    if (!session) {
+        router.push("/auth/signin");
+        return null;
     }
 
-    const parentName = `${(session.user as any)?.firstname ?? ""} ${(session.user as any)?.surname ?? ""}`.trim() || `${session.user?.name}`;
+    if (session.user?.role !== "parent") {
+        router.push(`/dashboard/${session.user?.role}`);
+        return null;
+    }
 
-    // pluralization for children count line
-    const childrenCountText = students.length === 1
-        ? `You have 1 child in this school.`
-        : `You have ${students.length} children in this school.`;
+    const parentName = `${(session.user as any)?.firstname ?? ""}  ${(session.user as any)?.surname ?? ""}`.trim() || `${session.user?.name}`;
+
+    const childrenCountText =
+        students.length === 1
+            ? `You have 1 child in this school.`
+            : `You have ${students.length} children in this school.`;
 
     return (
         <section className="p-4 lg:p-6 min-h-screen bg-gray-50">
@@ -185,31 +130,32 @@ const Parent = () => {
                 <div className="flex gap-6 flex-col xl:flex-row">
                     {/* LEFT COLUMN */}
                     <div className="w-full sm:w-2/3 flex flex-col gap-8">
-                        {/* STUDENTS BY GENDER CHART */}
-                        <div className="">
+                        <div>
                             <CountChartContainer data={studentsByGender} />
                         </div>
 
-                        {/* STUDENTS TABLE (preview) */}
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <div className="mb-4">
                                 <p className="text-sm text-gray-500">{childrenCountText}</p>
                             </div>
-
-                            <div className="w-full">
-                                <DataTable value={students} paginator rows={5} responsiveLayout="scroll" emptyMessage="No students to show">
-                                    <Column body={avatarBody} header="" style={{ width: 72 }} />
-                                    <Column field="admissionnumber" header="Admission" sortable />
-                                    <Column header="Name" body={nameBody} sortable />
-                                    <Column field="class.name" header="Class" body={(row: StudentPreview) => row.class?.name ?? "Not assigned"} sortable />
-                                </DataTable>
-                            </div>
+                            <DataTable
+                                value={students}
+                                paginator
+                                rows={5}
+                                responsiveLayout="scroll"
+                                emptyMessage="No students to show"
+                            >
+                                <Column body={avatarBody} header="" style={{ width: 72 }} />
+                                <Column field="admissionnumber" header="Admission" sortable />
+                                <Column header="Name" body={nameBody} sortable />
+                                <Column field="className" header="Class" sortable />
+                            </DataTable>
                         </div>
                     </div>
 
                     {/* RIGHT COLUMN */}
                     <div className="w-full sm:w-1/3 flex flex-col gap-8">
-                        <EventCalendarContainer searchParams={Object.fromEntries(searchParams)} />
+                        <EventCalendarContainer searchParams={{ parentid: parentId ?? "" }} />
                         <Announcements />
                     </div>
                 </div>

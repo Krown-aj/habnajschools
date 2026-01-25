@@ -12,12 +12,12 @@ model Administration {
   id            String         @id @default(cuid())
   email         String         @unique
   password      String?
+  role          Roles
+  createdAt     DateTime       @default(now())
+  active        Boolean        @default(true)
+  updatedAt     DateTime       @updatedAt
   username      String?
   avarta        String?
-  role          Roles
-  active        Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
   notifications Notification[]
 }
 
@@ -40,25 +40,25 @@ model Student {
   lga                String?
   avarta             String?
   password           String?
-  active             Boolean             @default(true)
-  section            String?
   parentid           String
-  parent             Parent              @relation(fields: [parentid], references: [id])
   classid            String
-  class              Class               @relation(fields: [classid], references: [id])
-  attendances        Attendance[]
-  studentAssessments StudentAssessment[]
-  assignments        Assignment[]
-  submissions        Submission[]
-  answers            Answer[]
-  grades             StudentGrade[]
-  reportCards        ReportCard[]
-  traits             StudentTrait[]
-  payments           Payment[]
-  notifications      Notification[]
-  promotions         StudentPromotion[]
   createdAt          DateTime            @default(now())
+  active             Boolean             @default(true)
   updatedAt          DateTime            @updatedAt
+  section            String?
+  answers            Answer[]
+  attendances        Attendance[]
+  notifications      Notification[]
+  payments           Payment[]
+  reportCards        ReportCard[]
+  class              Class               @relation(fields: [classid], references: [id])
+  parent             Parent              @relation(fields: [parentid], references: [id])
+  studentAssessments StudentAssessment[]
+  grades             StudentGrade[]
+  promotions         StudentPromotion[]
+  traits             StudentTrait[]
+  submissions        Submission[]
+  assignments        Assignment[]        @relation("AssignmentToStudent")
 }
 
 model Teacher {
@@ -70,7 +70,6 @@ model Teacher {
   birthday      DateTime?
   bloodgroup    String?
   gender        UserSex
-  qualification String?
   state         String?
   lga           String?
   email         String         @unique
@@ -78,16 +77,17 @@ model Teacher {
   address       String
   avarta        String?
   password      String?
+  createdAt     DateTime       @default(now())
   active        Boolean        @default(true)
+  updatedAt     DateTime       @updatedAt
+  qualification String?
   section       String?
-  subjects      Subject[]
+  assignments   Assignment[]
   classes       Class[]
   lessons       Lesson[]
-  assignments   Assignment[]
-  tests         Test[]
   notifications Notification[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  tests         Test[]
+  subjects      Subject[]      @relation("SubjectToTeacher")
 }
 
 model Parent {
@@ -107,61 +107,61 @@ model Parent {
   phone         String         @unique
   address       String?
   password      String?
-  avarta        String?
-  active        Boolean        @default(true)
-  students      Student[]
-  notifications Notification[]
   createdAt     DateTime       @default(now())
+  active        Boolean        @default(true)
   updatedAt     DateTime       @updatedAt
+  avarta        String?
+  notifications Notification[]
+  students      Student[]
 }
 
 model Subject {
   id                 String              @id @default(cuid())
   name               String
   category           String
-  section            String?
-  teachers           Teacher[]
-  assignments        Assignment[]
-  lessons            Lesson[]
-  tests              Test[]
-  studentAssessments StudentAssessment[]
-  studentGrades      StudentGrade[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  section            String?
+  assignments        Assignment[]
+  lessons            Lesson[]
+  studentAssessments StudentAssessment[]
+  studentGrades      StudentGrade[]
+  tests              Test[]
+  teachers           Teacher[]           @relation("SubjectToTeacher")
 }
 
 model Class {
   id                 String              @id @default(cuid())
   name               String              @unique
   category           String?
-  section            String?
   capacity           Int?
   formmasterid       String?
-  formmaster         Teacher?            @relation(fields: [formmasterid], references: [id])
-  students           Student[]
-  reportCards        ReportCard[]
-  lessons            Lesson[]
-  events             Event[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  section            String?
   announcements      Announcement[]
   assignments        Assignment[]
-  tests              Test[]
+  formmaster         Teacher?            @relation(fields: [formmasterid], references: [id])
+  events             Event[]
+  lessons            Lesson[]
+  reportCards        ReportCard[]
+  students           Student[]
   studentAssessments StudentAssessment[]
   studentGrades      StudentGrade[]
   fromPromotions     StudentPromotion[]  @relation("FromClass")
   toPromotions       StudentPromotion[]  @relation("ToClass")
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  tests              Test[]
 }
 
 model PaymentSetup {
   id          String   @id @default(cuid())
   amount      Int
-  baseFees    Int
   partpayment Boolean  @default(true)
   session     String
   term        String
-  level       String
   createdAt   DateTime @default(now())
+  baseFees    Int
+  level       String
   updatedAt   DateTime @updatedAt
 }
 
@@ -170,11 +170,11 @@ model Payment {
   session   String
   term      Terms
   amount    Int
-  status    PaymentStatus @default(PENDING)
   studentid String
-  student   Student       @relation(fields: [studentid], references: [id])
   createdAt DateTime      @default(now())
+  status    PaymentStatus @default(PENDING)
   updatedAt DateTime      @updatedAt
+  student   Student       @relation(fields: [studentid], references: [id])
 }
 
 model Term {
@@ -197,12 +197,12 @@ model Lesson {
   startTime   DateTime
   endTime     DateTime
   subjectid   String
-  subject     Subject      @relation(fields: [subjectid], references: [id])
   classid     String
-  class       Class        @relation(fields: [classid], references: [id])
   teacherid   String
-  teacher     Teacher      @relation(fields: [teacherid], references: [id])
   attendances Attendance[]
+  class       Class        @relation(fields: [classid], references: [id])
+  subject     Subject      @relation(fields: [subjectid], references: [id])
+  teacher     Teacher      @relation(fields: [teacherid], references: [id])
 }
 
 model Assignment {
@@ -213,15 +213,15 @@ model Assignment {
   duedate     DateTime
   graded      Boolean
   subjectid   String
-  subject     Subject      @relation(fields: [subjectid], references: [id])
   teacherid   String
-  teacher     Teacher      @relation(fields: [teacherid], references: [id])
-  classid     String
-  class       Class        @relation(fields: [classid], references: [id])
-  submissions Submission[]
-  students    Student[]
   createdAt   DateTime     @default(now())
+  classid     String
   updatedAt   DateTime     @updatedAt
+  class       Class        @relation(fields: [classid], references: [id])
+  subject     Subject      @relation(fields: [subjectid], references: [id])
+  teacher     Teacher      @relation(fields: [teacherid], references: [id])
+  submissions Submission[]
+  students    Student[]    @relation("AssignmentToStudent")
 }
 
 model Test {
@@ -235,16 +235,16 @@ model Test {
   testdate     DateTime
   testtime     DateTime
   term         String
-  questions    Question[]
-  answers      Answer[]
   subjectid    String
-  subject      Subject    @relation(fields: [subjectid], references: [id])
   teacherid    String
-  teacher      Teacher    @relation(fields: [teacherid], references: [id])
-  classid      String
-  class        Class      @relation(fields: [classid], references: [id])
   createdAt    DateTime   @default(now())
+  classid      String
   updatedAt    DateTime   @updatedAt
+  answers      Answer[]
+  questions    Question[]
+  class        Class      @relation(fields: [classid], references: [id])
+  subject      Subject    @relation(fields: [subjectid], references: [id])
+  teacher      Teacher    @relation(fields: [teacherid], references: [id])
 }
 
 model Question {
@@ -260,11 +260,11 @@ model Answer {
   id        String   @id @default(cuid())
   score     Int
   testid    String
-  test      Test     @relation(fields: [testid], references: [id])
   studentid String
-  student   Student  @relation(fields: [studentid], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  student   Student  @relation(fields: [studentid], references: [id])
+  test      Test     @relation(fields: [testid], references: [id])
 }
 
 model Submission {
@@ -274,24 +274,24 @@ model Submission {
   score        Int
   file         String
   assignmentId String?
-  assignment   Assignment? @relation(fields: [assignmentId], references: [id])
   studentId    String
-  student      Student     @relation(fields: [studentId], references: [id])
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id])
+  student      Student     @relation(fields: [studentId], references: [id])
 }
 
 model GradingPolicy {
   id          String       @id @default(cuid())
-  title       String
-  description String?
   passMark    Int
   maxScore    Int
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  description String?
+  title       String
   assessments Assessment[]
   gradings    Grading[]
   traits      Trait[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
 
   @@index([createdAt])
 }
@@ -302,11 +302,11 @@ model Assessment {
   weight             Float
   maxScore           Int
   gradingPolicyId    String
-  gradingPolicy      GradingPolicy       @relation(fields: [gradingPolicyId], references: [id])
-  studentGrades      StudentGrade[]
-  studentAssessments StudentAssessment[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  gradingPolicy      GradingPolicy       @relation(fields: [gradingPolicyId], references: [id])
+  studentAssessments StudentAssessment[]
+  studentGrades      StudentGrade[]      @relation("AssessmentToStudentGrade")
 
   @@unique([gradingPolicyId, name], name: "unique_assessment_name_per_policy")
   @@index([gradingPolicyId])
@@ -319,13 +319,14 @@ model Grading {
   term               Terms
   published          Boolean             @default(false)
   gradingPolicyId    String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  section            String?
   gradingPolicy      GradingPolicy       @relation(fields: [gradingPolicyId], references: [id])
   reportCards        ReportCard[]
   studentAssessments StudentAssessment[]
   studentGrades      StudentGrade[]
   studentTraits      StudentTrait[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
 
   @@unique([gradingPolicyId, session, term], name: "unique_policy_session_term")
   @@index([session, term, gradingPolicyId])
@@ -337,46 +338,38 @@ model StudentGrade {
   grade           String?
   remark          String?
   subjectPosition String?
-  assessments     Assessment[]
   studentId       String
-  student         Student      @relation(fields: [studentId], references: [id])
   classId         String
-  class           Class        @relation(fields: [classId], references: [id])
   subjectId       String
-  subject         Subject      @relation(fields: [subjectId], references: [id])
   gradingId       String
-  grading         Grading      @relation(fields: [gradingId], references: [id])
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  class           Class        @relation(fields: [classId], references: [id])
+  grading         Grading      @relation(fields: [gradingId], references: [id])
+  student         Student      @relation(fields: [studentId], references: [id])
+  subject         Subject      @relation(fields: [subjectId], references: [id])
+  assessments     Assessment[] @relation("AssessmentToStudentGrade")
 
   @@unique([studentId, gradingId, subjectId, classId], name: "unique_student_grade_per_subject")
   @@index([studentId, gradingId, subjectId, classId])
 }
 
 model StudentAssessment {
-  id String @id @default(cuid())
-
-  studentId String
-  student   Student @relation(fields: [studentId], references: [id])
-
+  id           String     @id @default(cuid())
+  studentId    String
   assessmentId String
+  subjectId    String
+  classId      String
+  gradingId    String
+  score        Float
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  class        Class      @relation(fields: [classId], references: [id])
+  grading      Grading    @relation(fields: [gradingId], references: [id])
+  student      Student    @relation(fields: [studentId], references: [id])
+  subject      Subject    @relation(fields: [subjectId], references: [id])
 
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id])
-
-  classId String
-  class   Class  @relation(fields: [classId], references: [id])
-
-  gradingId String
-  grading   Grading @relation(fields: [gradingId], references: [id])
-
-  score Float
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // enforce one mark per (student, assessment, subject, class, grading)
   @@unique([studentId, assessmentId, subjectId, classId, gradingId], name: "unique_student_assessment")
   @@index([studentId, assessmentId, subjectId, classId, gradingId])
 }
@@ -386,41 +379,41 @@ model Trait {
   name            String
   category        TraitCategory
   gradingpolicyId String
-  gradingpolicy   GradingPolicy  @relation(fields: [gradingpolicyId], references: [id])
-  studentTraits   StudentTrait[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  studentTraits   StudentTrait[]
+  gradingpolicy   GradingPolicy  @relation(fields: [gradingpolicyId], references: [id])
 }
 
 model StudentTrait {
   id        String   @id @default(cuid())
+  studentId String
   score     Int
   remark    String?
-  traitId   String
-  trait     Trait    @relation(fields: [traitId], references: [id])
-  studentId String
-  student   Student  @relation(fields: [studentId], references: [id])
-  gradingId String
-  grading   Grading  @relation(fields: [gradingId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  gradingId String
+  traitId   String
+  grading   Grading  @relation(fields: [gradingId], references: [id])
+  student   Student  @relation(fields: [studentId], references: [id])
+  trait     Trait    @relation(fields: [traitId], references: [id])
 }
 
 model ReportCard {
   id               String   @id @default(cuid())
+  studentId        String
+  classId          String
   totalScore       Float?
   averageScore     Float?
   classPosition    String?
   remark           String?
-  formmasterRemark String?
-  studentId        String
-  student          Student  @relation(fields: [studentId], references: [id])
-  classId          String
-  class            Class    @relation(fields: [classId], references: [id])
-  gradingId        String
-  grading          Grading  @relation(fields: [gradingId], references: [id])
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  formmasterRemark String?
+  gradingId        String
+  class            Class    @relation(fields: [classId], references: [id])
+  grading          Grading  @relation(fields: [gradingId], references: [id])
+  student          Student  @relation(fields: [studentId], references: [id])
 
   @@index([studentId, gradingId, classId])
 }
@@ -428,17 +421,17 @@ model ReportCard {
 model StudentPromotion {
   id          String          @id @default(cuid())
   studentId   String
-  student     Student         @relation(fields: [studentId], references: [id])
   fromClassId String
-  fromClass   Class           @relation("FromClass", fields: [fromClassId], references: [id])
   toClassId   String
-  toClass     Class           @relation("ToClass", fields: [toClassId], references: [id])
   session     String
   promotedAt  DateTime        @default(now())
   status      PromotionStatus
   remark      String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  fromClass   Class           @relation("FromClass", fields: [fromClassId], references: [id])
+  student     Student         @relation(fields: [studentId], references: [id])
+  toClass     Class           @relation("ToClass", fields: [toClassId], references: [id])
 }
 
 model Attendance {
@@ -446,9 +439,9 @@ model Attendance {
   date      DateTime
   present   Boolean
   studentId String
-  student   Student  @relation(fields: [studentId], references: [id])
   lessonId  Int
   lesson    Lesson   @relation(fields: [lessonId], references: [id])
+  student   Student  @relation(fields: [studentId], references: [id])
 }
 
 model Event {
@@ -508,13 +501,13 @@ model Notification {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   studentId String?
-  student   Student?         @relation(fields: [studentId], references: [id])
   teacherId String?
-  teacher   Teacher?         @relation(fields: [teacherId], references: [id])
   parentId  String?
-  parent    Parent?          @relation(fields: [parentId], references: [id])
   adminId   String?
   admin     Administration?  @relation(fields: [adminId], references: [id])
+  parent    Parent?          @relation(fields: [parentId], references: [id])
+  student   Student?         @relation(fields: [studentId], references: [id])
+  teacher   Teacher?         @relation(fields: [teacherId], references: [id])
 }
 
 enum UserSex {

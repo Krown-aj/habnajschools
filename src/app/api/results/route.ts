@@ -81,7 +81,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             UserRole.PARENT,
         ]);
         if (validation.error) return validation.error;
-        const user = (validation as any).user;
+        const user = (validation as any).session.user;
         const userRole = validation?.userRole;
 
         const url = new URL(request.url);
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 return NextResponse.json({ error: "Unauthorized Access - You can't access this record" }, { status: 403 });
             }
         } else if (userRole === UserRole.PARENT) {
-            if (!studentId && !classId) {
+            if (classId) {
                 const children = await prisma.student.findMany({
                     where: { parentid: user.id },
                     select: { id: true },
@@ -294,6 +294,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 // push student (grading) entry
                 gradingGroups.get(gId)!.gradings.push({
                     admissionnumber: rc.student.admissionnumber,
+                    studentId: rc.student.id,
                     firstname: rc.student.firstname,
                     surname: rc.student.surname,
                     othername: rc.student.othername,
@@ -314,6 +315,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
 
         return successResponse(payload);
+
     } catch (error) {
         return handleError(error, "Failed to fetch report cards");
     }
