@@ -95,7 +95,7 @@ const Results: React.FC = () => {
     });
 
     const role = session?.user?.role || "Guest";
-    const parent = role.toLocaleLowerCase('parent');
+    const parent = role.toLocaleLowerCase() === "parent";
 
     const show = useCallback(
         (
