@@ -182,11 +182,12 @@ const Results: React.FC = () => {
 
         const selectedCls = classes.find(c => c.id === selectedClass);
         if (!selectedCls?.section) return undefined;
-
+        const section = selectedCls.section.toLocaleLowerCase();
+        const selectedSection = section === 'nursery' ? 'primary' : section;
         return gradings.find(g =>
             g.session === selectedSession &&
             g.term === selectedTerm &&
-            g.section.toLocaleLowerCase() === selectedCls.section.toLocaleLowerCase()
+            g.section.toLocaleLowerCase() === selectedSection
         );
     }, [
         gradings,
