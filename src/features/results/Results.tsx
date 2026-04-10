@@ -614,7 +614,7 @@ const Results: React.FC = () => {
             });
 
             // Keys and footer placed inside page bounds
-            const footerBase = doc.internal.pageSize.getHeight() - 20;
+            const footerBase = doc.internal.pageSize.getHeight() - 15;
             doc.setFontSize(7);
             doc.setFont('helvetica', 'italic');
             doc.text('Keys: A: Excellent, B: Very Good, C: Good, D: Pass, F: Fail', margin, footerBase);
