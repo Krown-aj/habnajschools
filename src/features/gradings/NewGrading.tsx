@@ -29,6 +29,12 @@ const termOptions: Option[] = [
     { label: "Third", value: "Third" },
 ];
 
+// Define section options for dropdown
+const sectionOptions: Option[] = [
+    { label: "Primary", value: "PRIMARY" },
+    { label: "Secondary", value: "SECONDARY" },
+];
+
 const NewGrading: React.FC = () => {
     const router = useRouter();
     const toast = useRef<Toast>(null);
@@ -189,22 +195,42 @@ const NewGrading: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="p-field">
-                        <label htmlFor="gradingPolicyId">Grading Policy</label>
-                        <Controller
-                            name="gradingPolicyId"
-                            control={control}
-                            render={({ field }) => (
-                                <Dropdown
-                                    id="gradingPolicyId"
-                                    {...field}
-                                    options={gradingPolicies}
-                                    placeholder="Select Grading Policy"
-                                    className={errors.gradingPolicyId ? "p-invalid w-full" : "w-full"}
-                                />
-                            )}
-                        />
-                        {errors.gradingPolicyId && <small className="p-error">{errors.gradingPolicyId.message}</small>}
+                    <div className="p-field grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="gradingPolicyId">Grading Policy</label>
+                            <Controller
+                                name="gradingPolicyId"
+                                control={control}
+                                render={({ field }) => (
+                                    <Dropdown
+                                        id="gradingPolicyId"
+                                        {...field}
+                                        options={gradingPolicies}
+                                        placeholder="Select Grading Policy"
+                                        className={errors.gradingPolicyId ? "p-invalid w-full" : "w-full"}
+                                    />
+                                )}
+                            />
+                            {errors.gradingPolicyId && <small className="p-error">{errors.gradingPolicyId.message}</small>}
+                        </div>
+
+                        <div>
+                            <label htmlFor="section">Section</label>
+                            <Controller
+                                name="section"
+                                control={control}
+                                render={({ field }) => (
+                                    <Dropdown
+                                        id="section"
+                                        {...field}
+                                        options={sectionOptions}
+                                        placeholder="Select Section"
+                                        className={errors.section ? "p-invalid w-full" : "w-full"}
+                                    />
+                                )}
+                            />
+                            {errors.section && <small className="p-error">{errors.section.message}</small>}
+                        </div>
                     </div>
 
                     <div className="p-field">

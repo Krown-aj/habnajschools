@@ -52,6 +52,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                         gradingId: true,
                     }
                 },
+                term: {
+                    select: {
+                        term: true,
+                        start: true,
+                        end: true,
+                        nexttime: true,
+                        session: true,
+                    }
+                },
                 studentTraits: {
                     select: {
                         id: true,

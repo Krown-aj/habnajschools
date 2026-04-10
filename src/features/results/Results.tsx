@@ -217,7 +217,7 @@ const Results: React.FC = () => {
             average: typeof g.grades?.averageScore === "number" ? Number(Number(g.grades.averageScore).toFixed(2)) : (g.grades?.average ? Number(Number(g.grades.average).toFixed(2)) : undefined),
             overallPosition: g.grades?.classPosition ?? undefined,
             createdAt: g.createdAt ?? undefined,
-            _raw: { class: classObj?.class, session: classObj?.session, section: section, term: classObj?.term, gradingEntry: g, grading: classObj?.grading ?? undefined },
+            _raw: { class: classObj?.class, session: classObj?.session, section: section, term: classObj?.term, nexttime: classObj?.term?.nexttime ?? classObj?.nexttime ?? null, gradingEntry: g, grading: classObj?.grading ?? undefined },
         }));
 
         rows.sort((a, b) => parseOrdinal(a.overallPosition) - parseOrdinal(b.overallPosition));
@@ -231,6 +231,7 @@ const Results: React.FC = () => {
             return;
         }
         const grading = findGrading();
+        console.log("Grading data: ", grading);
         if (!grading) {
             setResults([]);
             show("warn", "No Grading Found", "No grading found for the selected session and term. Please create the grading first.");
@@ -266,6 +267,17 @@ const Results: React.FC = () => {
             controller.abort();
         };
     }, [selectedSession, selectedTerm, selectedClass, findGrading, show, transformApiPayloadToRows]);
+
+    const formatDate = (date?: string | null) => {
+        if (!date) return "-";
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return "-";
+        return d.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        });
+    };
 
     const deleteApi = useCallback(async (ids: string[]) => {
         const query = ids.map((id) => `ids=${encodeURIComponent(id)}`).join("&");
@@ -444,7 +456,11 @@ const Results: React.FC = () => {
             const gradingEntry = row._raw?.gradingEntry ?? {};
             const term = row._raw?.term ?? row._raw?.grading?.term ?? selectedTerm;
             const session = row._raw?.session ?? row._raw?.grading?.session ?? selectedSession;
-            const nextTermBegins = gradingEntry?.nextTermBegins ?? "May 11, 2026";
+            /* const nextTermBegins = gradingEntry?.nextTermBegins ?? "May 11, 2026"; */
+            const nextTermBegins = formatDate(
+                row._raw?.nexttime ??
+                row._raw?.grading?.term?.nexttime
+            );
             const infoStartY = 36;
             autoTable(doc, {
                 startY: infoStartY,
