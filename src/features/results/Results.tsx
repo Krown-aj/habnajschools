@@ -220,6 +220,8 @@ const Results: React.FC = () => {
         const currentTerm = termsData.find(t => t.session === selectedSession && t.term === selectedTerm)
         const nextTermBegin = currentTerm?.nextterm
 
+        console.log("Terms: ", termsData, "Current Term:", currentTerm, "Next Term:", nextTermBegin)
+
         const rows: ReportCardRow[] = (classObj?.gradings ?? []).map((g: any, i: number) => ({
             id: `${classObj?.class?.id || "c"}_${g.admissionnumber || i}`,
             studentId: g.studentId ?? undefined,
