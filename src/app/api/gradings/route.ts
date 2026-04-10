@@ -65,15 +65,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                         gradingId: true
                     }
                 },
-                term: {
-                    select: {
-                        term: true,
-                        start: true,
-                        end: true,
-                        nexttime: true,
-                        session: true,
-                    }
-                },
                 _count: {
                     select: {
                         reportCards: true,
