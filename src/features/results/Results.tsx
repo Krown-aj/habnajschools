@@ -236,7 +236,7 @@ const Results: React.FC = () => {
 
         rows.sort((a, b) => parseOrdinal(a.overallPosition) - parseOrdinal(b.overallPosition));
         return rows;
-    }, [selectedClass]);
+    }, [selectedClass, selectedTerm, selectedSession]);
 
     useEffect(() => {
         let mounted = true;
