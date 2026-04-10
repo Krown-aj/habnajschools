@@ -282,7 +282,6 @@ const Results: React.FC = () => {
     }, [selectedSession, selectedTerm, selectedClass, findGrading, show, transformApiPayloadToRows]);
 
     const formatDate = (date?: string | null) => {
-        console.log("Date received: ", date)
         if (!date) return "-";
         const d = new Date(date);
         if (isNaN(d.getTime())) return "-";
@@ -470,7 +469,6 @@ const Results: React.FC = () => {
             const gradingEntry = row._raw?.gradingEntry ?? {};
             const term = row._raw?.term ?? row._raw?.grading?.term ?? selectedTerm;
             const session = row._raw?.session ?? row._raw?.grading?.session ?? selectedSession;
-            console.log("Row data:", row._raw)
             /* const nextTermBegins = gradingEntry?.nextTermBegins ?? "May 11, 2026"; */
             const nextTermBegins = formatDate(
                 row._raw?.nexttime ??
