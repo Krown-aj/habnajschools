@@ -33,6 +33,8 @@ import Spinner from "@/components/Spinner/Spinner";
 import { getTeacherRemark, toOrdinal, parseOrdinal } from "@/lib/utils";
 import { CONTACT } from "@/constants";
 
+import { useGetTerms } from "@/hooks/useTerms";
+
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -93,6 +95,13 @@ const Results: React.FC = () => {
             matchMode: FilterMatchMode.CONTAINS
         } as DataTableFilterMetaData,
     });
+
+    // Queries & mutations
+    const {
+        data: termsData = [],
+        isPending: isPendingTerms,
+        isError: isTermsError,
+    } = useGetTerms();
 
     const role = session?.user?.role || "Guest";
     const parent = role?.toLocaleLowerCase() === "parent";
@@ -208,6 +217,9 @@ const Results: React.FC = () => {
             if (found) classObj = found;
         }
 
+        const currentTerm = termsData.find(t => t.session === selectedSession && t.term === selectedTerm)
+        const nextTermBegin = currentTerm?.nextterm
+
         const rows: ReportCardRow[] = (classObj?.gradings ?? []).map((g: any, i: number) => ({
             id: `${classObj?.class?.id || "c"}_${g.admissionnumber || i}`,
             studentId: g.studentId ?? undefined,
@@ -217,7 +229,7 @@ const Results: React.FC = () => {
             average: typeof g.grades?.averageScore === "number" ? Number(Number(g.grades.averageScore).toFixed(2)) : (g.grades?.average ? Number(Number(g.grades.average).toFixed(2)) : undefined),
             overallPosition: g.grades?.classPosition ?? undefined,
             createdAt: g.createdAt ?? undefined,
-            _raw: { class: classObj?.class, session: classObj?.session, section: section, term: classObj?.term, nexttime: classObj?.term?.nexttime ?? classObj?.nexttime ?? null, gradingEntry: g, grading: classObj?.grading ?? undefined },
+            _raw: { class: classObj?.class, session: classObj?.session, section: section, term: classObj?.term, nexttime: nextTermBegin ?? null, gradingEntry: g, grading: classObj?.grading ?? undefined },
         }));
 
         rows.sort((a, b) => parseOrdinal(a.overallPosition) - parseOrdinal(b.overallPosition));
@@ -231,7 +243,6 @@ const Results: React.FC = () => {
             return;
         }
         const grading = findGrading();
-        console.log("Grading data: ", grading);
         if (!grading) {
             setResults([]);
             show("warn", "No Grading Found", "No grading found for the selected session and term. Please create the grading first.");
@@ -269,6 +280,7 @@ const Results: React.FC = () => {
     }, [selectedSession, selectedTerm, selectedClass, findGrading, show, transformApiPayloadToRows]);
 
     const formatDate = (date?: string | null) => {
+        console.log("Date received: ", date)
         if (!date) return "-";
         const d = new Date(date);
         if (isNaN(d.getTime())) return "-";
@@ -456,6 +468,7 @@ const Results: React.FC = () => {
             const gradingEntry = row._raw?.gradingEntry ?? {};
             const term = row._raw?.term ?? row._raw?.grading?.term ?? selectedTerm;
             const session = row._raw?.session ?? row._raw?.grading?.session ?? selectedSession;
+            console.log("Row data:", row._raw)
             /* const nextTermBegins = gradingEntry?.nextTermBegins ?? "May 11, 2026"; */
             const nextTermBegins = formatDate(
                 row._raw?.nexttime ??

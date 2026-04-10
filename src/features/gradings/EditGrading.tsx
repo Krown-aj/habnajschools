@@ -104,6 +104,7 @@ const EditGrading: React.FC = () => {
             setValue("title", gradingData.title ?? "");
             setValue("session", gradingData.session ?? "");
             setValue("term", gradingData.term ?? undefined);
+            setValue("section", gradingData.section ?? "");
             setValue("published", gradingData.published ?? false);
             setValue("gradingPolicyId", gradingData.gradingPolicyId ?? "");
         }
