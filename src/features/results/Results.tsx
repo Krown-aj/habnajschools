@@ -418,8 +418,6 @@ const Results: React.FC = () => {
             const pageWidth = doc.internal.pageSize.getWidth();
             const section = row._raw?.section?.toLocaleLowerCase();
 
-            console.log("Section: ", section, "data:: ", row._raw)
-
             /* ---------------------------- HEADER ---------------------------- */
             // Logo section
             const logoSize = 20;
@@ -603,7 +601,7 @@ const Results: React.FC = () => {
             const teacherGeneratedRemark = generateTeacherRemark(row.average);
 
             autoTable(doc, {
-                startY: commentStartY + 45,
+                startY: commentStartY + 40,
                 theme: "grid",
                 head: [["Remarker", "Remark"]],
                 body: [
