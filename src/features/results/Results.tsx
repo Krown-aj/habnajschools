@@ -220,8 +220,6 @@ const Results: React.FC = () => {
         const currentTerm = termsData.find(t => t.session === selectedSession && t.term === selectedTerm)
         const nextTermBegin = currentTerm?.nextterm
 
-        console.log("Terms: ", termsData, "Current Term:", currentTerm, "Next Term:", nextTermBegin)
-
         const rows: ReportCardRow[] = (classObj?.gradings ?? []).map((g: any, i: number) => ({
             id: `${classObj?.class?.id || "c"}_${g.admissionnumber || i}`,
             studentId: g.studentId ?? undefined,
@@ -247,7 +245,7 @@ const Results: React.FC = () => {
         const grading = findGrading();
         if (!grading) {
             setResults([]);
-            show("warn", "No Grading Found", "No grading found for the selected session and term. Please create the grading first.");
+            show("warn", "Grading Not Found", "No result has been published for the selected session and term!");
             return;
         }
 
