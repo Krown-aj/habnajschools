@@ -215,7 +215,7 @@ const Results: React.FC = () => {
             average: typeof g.grades?.averageScore === "number" ? Number(Number(g.grades.averageScore).toFixed(2)) : (g.grades?.average ? Number(Number(g.grades.average).toFixed(2)) : undefined),
             overallPosition: g.grades?.classPosition ?? undefined,
             createdAt: g.createdAt ?? undefined,
-            _raw: { class: classObj?.class, session: classObj?.session, term: classObj?.term, gradingEntry: g, grading: classObj?.grading ?? undefined },
+            _raw: { class: classObj?.class, session: classObj?.session, section: classObj?.section, term: classObj?.term, gradingEntry: g, grading: classObj?.grading ?? undefined },
         }));
 
         rows.sort((a, b) => parseOrdinal(a.overallPosition) - parseOrdinal(b.overallPosition));
@@ -414,6 +414,9 @@ const Results: React.FC = () => {
         async (doc: jsPDF, row: ReportCardRow, idx: number, total: number, sharedAssessmentCols: string[], subjectStatsMap: Map<string, { avg: number | null; min: number | null; max: number | null; count: number }>, studentCount: number) => {
             const margin = 8;
             const pageWidth = doc.internal.pageSize.getWidth();
+            const section = row._raw?.section?.toLocaleLowerCase();
+
+            console.log("Section: ", section, "data:: ", row._raw)
 
             /* ---------------------------- HEADER ---------------------------- */
             // Logo section
@@ -441,7 +444,7 @@ const Results: React.FC = () => {
             const gradingEntry = row._raw?.gradingEntry ?? {};
             const term = row._raw?.term ?? row._raw?.grading?.term ?? selectedTerm;
             const session = row._raw?.session ?? row._raw?.grading?.session ?? selectedSession;
-            const nextTermBegins = gradingEntry?.nextTermBegins ?? "January 19, 2026";
+            const nextTermBegins = gradingEntry?.nextTermBegins ?? "May 11, 2026";
             const infoStartY = 36;
             autoTable(doc, {
                 startY: infoStartY,
@@ -542,16 +545,29 @@ const Results: React.FC = () => {
                     color: [30, 64, 175]
                 });
 
-            domains.push({
-                title: "Result Summary",
-                rows: [
-                    /* ["Students in Class", studentCount],
-                    ["Class Position", String(gradingEntry?.grades?.classPosition ?? row.overallPosition ?? "-")], */
-                    ["Total Score", String(gradingEntry?.grades?.totalScore ?? "-")],
-                    ["Average Score", gradingEntry?.grades?.averageScore != null ? String(Number(gradingEntry.grades.averageScore).toFixed(2)) : (row.average != null ? String(Number(row.average).toFixed(2)) : "-")],
-                ],
-                color: [41, 128, 185]
-            });
+            if (section === "nursery" || section === "primary") {
+                domains.push({
+                    title: "Result Summary",
+                    rows: [
+                        ["Students in Class", studentCount],
+                        ["Class Position", String(gradingEntry?.grades?.classPosition ?? row.overallPosition ?? "-")],
+                        ["Total Score", String(gradingEntry?.grades?.totalScore ?? "-")],
+                        ["Average Score", gradingEntry?.grades?.averageScore != null ? String(Number(gradingEntry.grades.averageScore).toFixed(2)) : (row.average != null ? String(Number(row.average).toFixed(2)) : "-")],
+                    ],
+                    color: [41, 128, 185]
+                });
+            } else {
+                domains.push({
+                    title: "Result Summary",
+                    rows: [
+                        /* ["Students in Class", studentCount],
+                        ["Class Position", String(gradingEntry?.grades?.classPosition ?? row.overallPosition ?? "-")], */
+                        ["Total Score", String(gradingEntry?.grades?.totalScore ?? "-")],
+                        ["Average Score", gradingEntry?.grades?.averageScore != null ? String(Number(gradingEntry.grades.averageScore).toFixed(2)) : (row.average != null ? String(Number(row.average).toFixed(2)) : "-")],
+                    ],
+                    color: [41, 128, 185]
+                });
+            }
 
             const count = domains.length;
             const gap = 6;

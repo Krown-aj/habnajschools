@@ -93,7 +93,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (bodyValidation.error) return bodyValidation.error;
 
         const data = bodyValidation.data!;
-        const { title, session, term, published, gradingPolicyId } = data;
+        const { title, session, term, section, published, gradingPolicyId } = data;
 
         if (gradingPolicyId && session && term) {
             const existing = await prisma.grading.findFirst({
@@ -116,6 +116,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (title !== undefined) updateData.title = title;
         if (session !== undefined) updateData.session = session;
         if (term !== undefined) updateData.term = term;
+        if (section !== undefined) updateData.section = section;
         if (published !== undefined) updateData.published = published;
         if (gradingPolicyId !== undefined) updateData.gradingPolicyId = gradingPolicyId;
 

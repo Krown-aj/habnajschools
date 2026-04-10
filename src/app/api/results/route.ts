@@ -149,7 +149,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                         avarta: true,
                     },
                 },
-                class: { select: { id: true, name: true } },
+                class: { select: { id: true, name: true, section: true } },
                 grading: { select: { id: true, title: true, session: true, term: true } },
             },
             orderBy: [{ classId: "asc" }, { classPosition: "asc" }],

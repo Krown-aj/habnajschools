@@ -149,7 +149,7 @@ export const gradingPolicyUpdateSchema = gradingPolicySchema.partial().extend({
         z.object({
             id: z.string().optional(),
             name: z.string().min(1, 'Trait name is required'),
-            category: z.nativeEnum(TraitCategory, { message: 'Invalid trait category' }),
+            category: z.enum(TraitCategory, { message: 'Invalid trait category' }),
         })
     ).optional(),
     deleteAssessments: z.array(z.string()).optional(),
@@ -162,7 +162,8 @@ export type GradingPolicyUpdateSchema = z.infer<typeof gradingPolicyUpdateSchema
 export const gradingSchema = z.object({
     title: z.string().min(1, 'Title is required'),
     session: z.string().min(1, 'Session is required'),
-    term: z.nativeEnum(Terms, { message: 'Invalid term' }),
+    term: z.enum(Terms, { message: 'Invalid term' }),
+    section: z.string().min(1, 'Section is required'),
     published: z.boolean().default(false),
     gradingPolicyId: z.string().min(1, 'Grading policy is required'),
 });

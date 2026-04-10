@@ -89,7 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const bodyValidation = await validateRequestBody(request, gradingSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, session, term, gradingPolicyId, published } = bodyValidation.data!;
+        const { title, session, term, section, gradingPolicyId, published } = bodyValidation.data!;
 
         const existingGrading = await prisma.grading.findUnique({
             where: {
@@ -113,6 +113,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 title,
                 session,
                 term,
+                section,
                 published,
                 gradingPolicyId,
             },

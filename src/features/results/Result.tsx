@@ -212,6 +212,7 @@ const Result: React.FC = () => {
     const downloadPdf = useCallback(async () => {
         if (!result) return;
         setProcessing(true);
+        const section = result?.class?.section?.toLocaleLowerCase()
 
         try {
             const doc = new jsPDF();
@@ -259,7 +260,7 @@ const Result: React.FC = () => {
                     result.class?.name ?? "-",
                     term ?? "-",
                     session ?? "-",
-                    result?.nextTermBegins ?? "January 19, 2026",
+                    result?.nextTermBegins ?? "May 11, 2026",
                 ]],
                 styles: { fontSize: 9, cellPadding: 2 },
                 headStyles: { fillColor: [22, 160, 133] },
@@ -330,15 +331,27 @@ const Result: React.FC = () => {
                     color: [30, 64, 175]
                 });
 
-            domains.push({
-                title: "Result Summary",
-                rows: [
-                    /*  ["Class Position", result.grades?.classPosition ?? "-"], */
-                    ["Total Score", result.grades?.totalScore ?? "-"],
-                    ["Average Score", result.grades?.averageScore?.toFixed(2) ?? "-"],
-                ],
-                color: [41, 128, 185]
-            });
+            if (section === "nursery" || section === "primary") {
+                domains.push({
+                    title: "Result Summary",
+                    rows: [
+                        ["Class Position", result.grades?.classPosition ?? "-"],
+                        ["Total Score", result.grades?.totalScore ?? "-"],
+                        ["Average Score", result.grades?.averageScore?.toFixed(2) ?? "-"],
+                    ],
+                    color: [41, 128, 185]
+                });
+            } else {
+                domains.push({
+                    title: "Result Summary",
+                    rows: [
+                        /*  ["Class Position", result.grades?.classPosition ?? "-"], */
+                        ["Total Score", result.grades?.totalScore ?? "-"],
+                        ["Average Score", result.grades?.averageScore?.toFixed(2) ?? "-"],
+                    ],
+                    color: [41, 128, 185]
+                });
+            }
 
             const startY = (doc as any).lastAutoTable.finalY + 4;
             const width = (pageWidth - margin * 2 - 6 * (domains.length - 1)) / domains.length;
