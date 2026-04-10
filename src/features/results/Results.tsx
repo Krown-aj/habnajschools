@@ -200,6 +200,8 @@ const Results: React.FC = () => {
 
     const transformApiPayloadToRows = useCallback((payload: any): ReportCardRow[] => {
         if (!Array.isArray(payload) || payload.length === 0) return [];
+        const selectedCls = classes.find(c => c.id === selectedClass);
+        const section = selectedCls?.section?.toLocaleLowerCase();
         let classObj = payload[0];
         if (selectedClass) {
             const found = payload.find((p: any) => p.class?.id === selectedClass);
@@ -215,7 +217,7 @@ const Results: React.FC = () => {
             average: typeof g.grades?.averageScore === "number" ? Number(Number(g.grades.averageScore).toFixed(2)) : (g.grades?.average ? Number(Number(g.grades.average).toFixed(2)) : undefined),
             overallPosition: g.grades?.classPosition ?? undefined,
             createdAt: g.createdAt ?? undefined,
-            _raw: { class: classObj?.class, session: classObj?.session, section: classObj?.section, term: classObj?.term, gradingEntry: g, grading: classObj?.grading ?? undefined },
+            _raw: { class: classObj?.class, session: classObj?.session, section: section, term: classObj?.term, gradingEntry: g, grading: classObj?.grading ?? undefined },
         }));
 
         rows.sort((a, b) => parseOrdinal(a.overallPosition) - parseOrdinal(b.overallPosition));
