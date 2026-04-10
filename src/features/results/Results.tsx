@@ -601,7 +601,7 @@ const Results: React.FC = () => {
             const teacherGeneratedRemark = generateTeacherRemark(row.average);
 
             autoTable(doc, {
-                startY: commentStartY + 40,
+                startY: commentStartY + 45,
                 theme: "grid",
                 head: [["Remarker", "Remark"]],
                 body: [
@@ -614,7 +614,7 @@ const Results: React.FC = () => {
             });
 
             // Keys and footer placed inside page bounds
-            const footerBase = doc.internal.pageSize.getHeight() - 30;
+            const footerBase = doc.internal.pageSize.getHeight() - 20;
             doc.setFontSize(7);
             doc.setFont('helvetica', 'italic');
             doc.text('Keys: A: Excellent, B: Very Good, C: Good, D: Pass, F: Fail', margin, footerBase);
