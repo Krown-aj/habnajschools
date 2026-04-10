@@ -95,7 +95,7 @@ const Results: React.FC = () => {
     });
 
     const role = session?.user?.role || "Guest";
-    const parent = role.toLocaleLowerCase() === "parent";
+    const parent = role?.toLocaleLowerCase() === "parent";
 
     const show = useCallback(
         (
@@ -182,12 +182,12 @@ const Results: React.FC = () => {
 
         const selectedCls = classes.find(c => c.id === selectedClass);
         if (!selectedCls?.section) return undefined;
-        const section = selectedCls.section.toLocaleLowerCase();
+        const section = selectedCls?.section?.toLocaleLowerCase();
         const selectedSection = section === 'nursery' ? 'primary' : section;
         return gradings.find(g =>
             g.session === selectedSession &&
             g.term === selectedTerm &&
-            g.section.toLocaleLowerCase() === selectedSection
+            g.section?.toLocaleLowerCase() === selectedSection
         );
     }, [
         gradings,
