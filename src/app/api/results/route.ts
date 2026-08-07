@@ -50,6 +50,21 @@ function generateRemark(average: number, passMark?: number | null): string {
     return baseRemark;
 }
 
+function normalizeTermName(term?: string | null): string {
+    return String(term ?? "").trim().toLowerCase();
+}
+
+function getHeadTeacherRemark(average: number, term?: string | null, section?: string | null): string {
+    const isThirdTerm = normalizeTermName(term) === "third";
+    const normalizedSection = String(section ?? "").trim().toLowerCase();
+    const isPrimaryOrNursery = normalizedSection === "primary" || normalizedSection === "nursery";
+
+    if (isThirdTerm && isPrimaryOrNursery) {
+        return average >= 40 ? "Promoted" : "Demoted";
+    }
+
+    return generateRemark(average);
+}
 
 type GenerateBody = {
     gradingId: string;
@@ -348,6 +363,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         });
         if (!grading) return NextResponse.json({ error: "Grading not found" }, { status: 404 });
         const passMark = grading.gradingPolicy?.passMark ?? null;
+        const isThirdTerm = normalizeTermName(grading.term) === "third";
 
         // Determine classes to process
         let classesToProcess: string[] = [];
@@ -372,6 +388,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         if (!studentsInClasses.length) {
             return NextResponse.json({ error: "No students found in the selected class(es)" }, { status: 404 });
+        }
+
+        const classesMeta = await prisma.class.findMany({
+            where: { id: { in: classesToProcess } },
+            select: { id: true, section: true },
+        });
+        const classSectionById = new Map(classesMeta.map((cls) => [cls.id, cls.section ?? ""]));
+
+        const previousTermAveragesByStudent = new Map<string, number[]>();
+        if (isThirdTerm) {
+            const priorTermReportCards = await prisma.reportCard.findMany({
+                where: {
+                    studentId: { in: studentsInClasses.map((student) => student.id) },
+                    grading: { session: grading.session },
+                    NOT: { gradingId },
+                },
+                select: {
+                    studentId: true,
+                    averageScore: true,
+                    grading: { select: { term: true } },
+                },
+            });
+
+            for (const card of priorTermReportCards) {
+                const average = typeof card.averageScore === "number" ? Number(card.averageScore) : null;
+                if (average === null) continue;
+                const termName = normalizeTermName(card.grading?.term);
+                if (termName !== "first" && termName !== "second" && termName !== "third") continue;
+                const existing = previousTermAveragesByStudent.get(card.studentId) ?? [];
+                existing.push(average);
+                previousTermAveragesByStudent.set(card.studentId, existing);
+            }
         }
 
         // fetch all grades for this gradingId (for any class)
@@ -408,14 +456,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const cardsForClass = studentsOfClass.map((stu) => {
                 const stat = totals.get(stu.id);
                 const totalScore = stat ? stat.total : 0;
-                const averageScore = stat && stat.count > 0 ? stat.total / stat.count : 0;
-                const remark = generateRemark(averageScore, passMark ?? undefined);
+                const currentAverageScore = stat && stat.count > 0 ? stat.total / stat.count : 0;
+                const previousAverages = isThirdTerm ? previousTermAveragesByStudent.get(stu.id) ?? [] : [];
+                const cumulativeAverage = previousAverages.length > 0
+                    ? (previousAverages.reduce((sum, value) => sum + value, 0) + currentAverageScore) / (previousAverages.length + 1)
+                    : currentAverageScore;
+                const averageScore = isThirdTerm ? cumulativeAverage : currentAverageScore;
+                const section = classSectionById.get(clsId) ?? "";
+                const remark = isThirdTerm
+                    ? getHeadTeacherRemark(averageScore, grading.term, section)
+                    : generateRemark(averageScore, passMark ?? undefined);
                 return {
                     totalScore,
                     averageScore,
                     classPosition: null as string | null,
                     remark,
-                    formmasterRemark: null as string | null,
+                    formmasterRemark: isThirdTerm && (section === "primary" || section === "nursery") ? remark : null,
                     studentId: stu.id,
                     classId: clsId,
                     gradingId,

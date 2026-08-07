@@ -467,7 +467,7 @@ const Results: React.FC = () => {
             const gradingEntry = row._raw?.gradingEntry ?? {};
             const term = row._raw?.term ?? row._raw?.grading?.term ?? selectedTerm;
             const session = row._raw?.session ?? row._raw?.grading?.session ?? selectedSession;
-            /* const nextTermBegins = gradingEntry?.nextTermBegins ?? "May 11, 2026"; */
+            /* const nextTermBegins = gradingEntry?.nextTermBegins ?? "September 14, 2026"; */
             const nextTermBegins = formatDate(
                 row._raw?.nexttime ??
                 row._raw?.grading?.term?.nexttime
