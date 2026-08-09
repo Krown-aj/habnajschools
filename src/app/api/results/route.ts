@@ -469,8 +469,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 const totalScore = stat ? stat.total : 0;
                 const currentAverageScore = stat && stat.count > 0 ? stat.total / stat.count : 0;
                 const section = classSectionById.get(clsId) ?? "";
-                // Only primary and nursery use the cumulative third-term average; secondary sections keep the normal term average.
-                const shouldUseCumulativeAverage = isThirdTerm && isPrimaryOrNurserySection(section);
+                // The cumulative third-term average is used for all sections; only the remarking differs by section.
+                const shouldUseCumulativeAverage = isThirdTerm;
                 const previousAverages = shouldUseCumulativeAverage
                     ? previousTermAveragesByStudent.get(stu.id) ?? { firstTermAverage: null, secondTermAverage: null }
                     : { firstTermAverage: null, secondTermAverage: null };
