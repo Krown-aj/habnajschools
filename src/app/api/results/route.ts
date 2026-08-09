@@ -396,7 +396,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         });
         const classSectionById = new Map(classesMeta.map((cls) => [cls.id, cls.section ?? ""]));
 
-        const previousTermAveragesByStudent = new Map<string, number[]>();
+        const previousTermAveragesByStudent = new Map<string, { firstTermAverage: number | null; secondTermAverage: number | null }>();
         if (isThirdTerm) {
             const priorTermReportCards = await prisma.reportCard.findMany({
                 where: {
@@ -415,9 +415,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 const average = typeof card.averageScore === "number" ? Number(card.averageScore) : null;
                 if (average === null) continue;
                 const termName = normalizeTermName(card.grading?.term);
-                if (termName !== "first" && termName !== "second" && termName !== "third") continue;
-                const existing = previousTermAveragesByStudent.get(card.studentId) ?? [];
-                existing.push(average);
+                const existing = previousTermAveragesByStudent.get(card.studentId) ?? {
+                    firstTermAverage: null,
+                    secondTermAverage: null,
+                };
+
+                if (termName === "first") {
+                    existing.firstTermAverage = average;
+                } else if (termName === "second") {
+                    existing.secondTermAverage = average;
+                }
+
                 previousTermAveragesByStudent.set(card.studentId, existing);
             }
         }
@@ -457,9 +465,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 const stat = totals.get(stu.id);
                 const totalScore = stat ? stat.total : 0;
                 const currentAverageScore = stat && stat.count > 0 ? stat.total / stat.count : 0;
-                const previousAverages = isThirdTerm ? previousTermAveragesByStudent.get(stu.id) ?? [] : [];
-                const cumulativeAverage = previousAverages.length > 0
-                    ? (previousAverages.reduce((sum, value) => sum + value, 0) + currentAverageScore) / (previousAverages.length + 1)
+                const previousAverages = isThirdTerm
+                    ? previousTermAveragesByStudent.get(stu.id) ?? { firstTermAverage: null, secondTermAverage: null }
+                    : { firstTermAverage: null, secondTermAverage: null };
+                const firstTermAverage = previousAverages.firstTermAverage ?? 0;
+                const secondTermAverage = previousAverages.secondTermAverage ?? 0;
+                const cumulativeAverage = isThirdTerm
+                    ? (firstTermAverage + secondTermAverage + currentAverageScore) / 3
                     : currentAverageScore;
                 const averageScore = isThirdTerm ? cumulativeAverage : currentAverageScore;
                 const section = classSectionById.get(clsId) ?? "";
