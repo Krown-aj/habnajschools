@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { validateSession, handleError, successResponse, UserRole } from "@/lib/utils/api-helpers";
+import { normalizeTermName } from "@/lib/utils";
 
 /**
  * helper: convert integer position to ordinal string
@@ -48,10 +49,6 @@ function generateRemark(average: number, passMark?: number | null): string {
     }
 
     return baseRemark;
-}
-
-function normalizeTermName(term?: string | null): string {
-    return String(term ?? "").trim().toLowerCase();
 }
 
 function isPrimaryOrNurserySection(section?: string | null): boolean {

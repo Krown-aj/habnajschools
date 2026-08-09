@@ -60,6 +60,20 @@ export const getTeacherRemark = (average: number | undefined | null) => {
     return "Below expectation — seek support and follow a guided study plan.";
 };
 
+export const normalizeTermName = (value: unknown): string => {
+    const raw = String(value ?? "").trim().toLowerCase();
+    if (!raw) return "";
+
+    const compact = raw.replace(/[^a-z0-9]+/g, " ").trim();
+    const withoutTerm = compact.replace(/\bterm\b/g, "").trim();
+
+    if (/^1st$|^first$/.test(withoutTerm)) return "first";
+    if (/^2nd$|^second$/.test(withoutTerm)) return "second";
+    if (/^3rd$|^third$/.test(withoutTerm)) return "third";
+
+    return withoutTerm;
+};
+
 // convert to ordinal (1 -> 1st, 2 -> 2nd, etc)
 export const toOrdinal = (value: any) => {
     const n = Number(String(value).replace(/[^0-9]/g, ""));

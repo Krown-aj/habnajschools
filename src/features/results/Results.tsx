@@ -30,7 +30,7 @@ import autoTable from "jspdf-autotable";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import Spinner from "@/components/Spinner/Spinner";
-import { getTeacherRemark, toOrdinal, parseOrdinal } from "@/lib/utils";
+import { getTeacherRemark, toOrdinal, parseOrdinal, normalizeTermName } from "@/lib/utils";
 import { CONTACT } from "@/constants";
 
 import { useGetTerms } from "@/hooks/useTerms";
@@ -193,9 +193,10 @@ const Results: React.FC = () => {
         if (!selectedCls?.section) return undefined;
         const section = selectedCls?.section?.toLocaleLowerCase();
         const selectedSection = section === 'nursery' ? 'primary' : section;
+        const selectedTermKey = normalizeTermName(selectedTerm);
         return gradings.find(g =>
             g.session === selectedSession &&
-            g.term === selectedTerm &&
+            normalizeTermName(g.term) === selectedTermKey &&
             g.section?.toLocaleLowerCase() === selectedSection
         );
     }, [

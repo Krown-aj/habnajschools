@@ -16,7 +16,7 @@ import { Toast } from "primereact/toast";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Spinner from "@/components/Spinner/Spinner";
-import { toOrdinal, getTeacherRemark } from "@/lib/utils";
+import { toOrdinal, getTeacherRemark, normalizeTermName } from "@/lib/utils";
 import { CONTACT } from "@/constants";
 
 const PROFILE_PLACEHOLDER = "/assets/logo.png";
@@ -74,7 +74,7 @@ const Result: React.FC = () => {
             const payload = body?.data ?? body;
 
             const sessionEntry = payload.find(
-                (p: any) => p.session === session && p.term === term
+                (p: any) => p.session === session && normalizeTermName(p.term) === normalizeTermName(term)
             );
 
             if (!sessionEntry) {
