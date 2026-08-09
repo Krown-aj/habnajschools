@@ -66,6 +66,34 @@ function getHeadTeacherRemark(average: number, term?: string | null, section?: s
     return generateRemark(average);
 }
 
+type PreviousTermAverages = {
+    firstTermAverage: number | null;
+    secondTermAverage: number | null;
+};
+
+function calculateCurrentAverageFromGrades(grades: Array<{ score?: number | null }>): number {
+    const numericScores = grades
+        .map((grade) => Number(grade?.score ?? 0))
+        .filter((value) => Number.isFinite(value));
+
+    if (numericScores.length === 0) return 0;
+
+    return numericScores.reduce((sum, value) => sum + value, 0) / numericScores.length;
+}
+
+function calculateEffectiveAverage(
+    currentAverageScore: number,
+    previousAverages?: PreviousTermAverages | null
+): number {
+    const firstTermAverage = Number(previousAverages?.firstTermAverage ?? 0);
+    const secondTermAverage = Number(previousAverages?.secondTermAverage ?? 0);
+    const priorValues = [firstTermAverage, secondTermAverage].filter((value) => Number.isFinite(value) && value !== 0);
+
+    if (priorValues.length === 0) return currentAverageScore;
+
+    return (priorValues.reduce((sum, value) => sum + value, 0) + currentAverageScore) / (priorValues.length + 1);
+}
+
 type GenerateBody = {
     gradingId: string;
     classId?: string;
@@ -178,6 +206,100 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const gradingIds = Array.from(new Set(reportCards.map((r) => r.grading.id)));
         const classIds = Array.from(new Set(reportCards.map((r) => r.class.id)));
         const studentIds = Array.from(new Set(reportCards.map((r) => r.student.id)));
+
+        const currentGrading = gradingId
+            ? await prisma.grading.findUnique({
+                where: { id: gradingId },
+                select: { id: true, term: true, session: true },
+            })
+            : null;
+        const isThirdTerm = normalizeTermName(currentGrading?.term) === "third";
+        const previousTermAveragesByStudent = new Map<string, PreviousTermAverages>();
+
+        if (isThirdTerm && currentGrading && studentIds.length > 0) {
+            const priorTermReportCards = await prisma.reportCard.findMany({
+                where: {
+                    studentId: { in: studentIds },
+                    grading: { session: currentGrading.session },
+                    NOT: { gradingId: currentGrading.id },
+                },
+                select: {
+                    studentId: true,
+                    averageScore: true,
+                    grading: { select: { term: true } },
+                },
+            });
+
+            for (const card of priorTermReportCards) {
+                const average = typeof card.averageScore === "number" ? Number(card.averageScore) : null;
+                if (average === null) continue;
+                const termName = normalizeTermName(card.grading?.term);
+                const existing = previousTermAveragesByStudent.get(card.studentId) ?? {
+                    firstTermAverage: null,
+                    secondTermAverage: null,
+                };
+
+                if (termName === "first" && existing.firstTermAverage === null) {
+                    existing.firstTermAverage = average;
+                } else if (termName === "second" && existing.secondTermAverage === null) {
+                    existing.secondTermAverage = average;
+                }
+
+                previousTermAveragesByStudent.set(card.studentId, existing);
+            }
+
+            const priorGradings = await prisma.grading.findMany({
+                where: {
+                    session: currentGrading.session,
+                    NOT: { id: currentGrading.id },
+                },
+                select: { id: true, term: true },
+            });
+
+            if (priorGradings.length > 0) {
+                const priorStudentGrades = await prisma.studentGrade.findMany({
+                    where: {
+                        gradingId: { in: priorGradings.map((grading) => grading.id) },
+                        studentId: { in: studentIds },
+                    },
+                    select: {
+                        studentId: true,
+                        gradingId: true,
+                        score: true,
+                    },
+                });
+
+                for (const grading of priorGradings) {
+                    const termName = normalizeTermName(grading.term);
+                    const totals = new Map<string, { total: number; count: number }>();
+
+                    for (const studentGrade of priorStudentGrades) {
+                        if (studentGrade.gradingId !== grading.id) continue;
+                        const current = totals.get(studentGrade.studentId) ?? { total: 0, count: 0 };
+                        current.total += Number(studentGrade.score ?? 0);
+                        current.count += 1;
+                        totals.set(studentGrade.studentId, current);
+                    }
+
+                    for (const [studentId, stat] of totals.entries()) {
+                        if (stat.count === 0) continue;
+                        const average = stat.total / stat.count;
+                        const existing = previousTermAveragesByStudent.get(studentId) ?? {
+                            firstTermAverage: null,
+                            secondTermAverage: null,
+                        };
+
+                        if (termName === "first" && existing.firstTermAverage === null) {
+                            existing.firstTermAverage = average;
+                        } else if (termName === "second" && existing.secondTermAverage === null) {
+                            existing.secondTermAverage = average;
+                        }
+
+                        previousTermAveragesByStudent.set(studentId, existing);
+                    }
+                }
+            }
+        }
 
         // Batch fetch studentGrades for these students & grading(s)
         const studentGrades = await prisma.studentGrade.findMany({
@@ -295,12 +417,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                         remark: st.remark ?? null,
                     }));
 
+                const currentAverageScore = calculateCurrentAverageFromGrades(gradesForStudent);
+                const effectiveAverageScore = isThirdTerm
+                    ? calculateEffectiveAverage(currentAverageScore, previousTermAveragesByStudent.get(rc.student.id))
+                    : currentAverageScore;
+
                 // Build the student-level grades object
                 const gradesObj = {
                     subjects: subjectsForStudent,
                     traits: traitsForStudent,
                     totalScore: rc.totalScore ?? 0,
-                    averageScore: rc.averageScore ?? 0,
+                    averageScore: effectiveAverageScore,
                     classPosition: rc.classPosition ?? null,
                     formmasterRemark: rc.formmasterRemark ?? null,
                     remark: rc.remark ?? null,
@@ -396,11 +523,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         });
         const classSectionById = new Map(classesMeta.map((cls) => [cls.id, cls.section ?? ""]));
 
-        const previousTermAveragesByStudent = new Map<string, { firstTermAverage: number | null; secondTermAverage: number | null }>();
+        const previousTermAveragesByStudent = new Map<string, PreviousTermAverages>();
         if (isThirdTerm) {
+            const studentIds = studentsInClasses.map((student) => student.id);
             const priorTermReportCards = await prisma.reportCard.findMany({
                 where: {
-                    studentId: { in: studentsInClasses.map((student) => student.id) },
+                    studentId: { in: studentIds },
                     grading: { session: grading.session },
                     NOT: { gradingId },
                 },
@@ -420,13 +548,65 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     secondTermAverage: null,
                 };
 
-                if (termName === "first") {
+                if (termName === "first" && existing.firstTermAverage === null) {
                     existing.firstTermAverage = average;
-                } else if (termName === "second") {
+                } else if (termName === "second" && existing.secondTermAverage === null) {
                     existing.secondTermAverage = average;
                 }
 
                 previousTermAveragesByStudent.set(card.studentId, existing);
+            }
+
+            const priorGradings = await prisma.grading.findMany({
+                where: {
+                    session: grading.session,
+                    NOT: { id: gradingId },
+                },
+                select: { id: true, term: true },
+            });
+
+            if (priorGradings.length > 0) {
+                const priorStudentGrades = await prisma.studentGrade.findMany({
+                    where: {
+                        gradingId: { in: priorGradings.map((priorGrading) => priorGrading.id) },
+                        studentId: { in: studentIds },
+                    },
+                    select: {
+                        studentId: true,
+                        gradingId: true,
+                        score: true,
+                    },
+                });
+
+                for (const priorGrading of priorGradings) {
+                    const termName = normalizeTermName(priorGrading.term);
+                    const totals = new Map<string, { total: number; count: number }>();
+
+                    for (const studentGrade of priorStudentGrades) {
+                        if (studentGrade.gradingId !== priorGrading.id) continue;
+                        const current = totals.get(studentGrade.studentId) ?? { total: 0, count: 0 };
+                        current.total += Number(studentGrade.score ?? 0);
+                        current.count += 1;
+                        totals.set(studentGrade.studentId, current);
+                    }
+
+                    for (const [studentId, stat] of totals.entries()) {
+                        if (stat.count === 0) continue;
+                        const average = stat.total / stat.count;
+                        const existing = previousTermAveragesByStudent.get(studentId) ?? {
+                            firstTermAverage: null,
+                            secondTermAverage: null,
+                        };
+
+                        if (termName === "first" && existing.firstTermAverage === null) {
+                            existing.firstTermAverage = average;
+                        } else if (termName === "second" && existing.secondTermAverage === null) {
+                            existing.secondTermAverage = average;
+                        }
+
+                        previousTermAveragesByStudent.set(studentId, existing);
+                    }
+                }
             }
         }
 
@@ -466,17 +646,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 const totalScore = stat ? stat.total : 0;
                 const currentAverageScore = stat && stat.count > 0 ? stat.total / stat.count : 0;
                 const section = classSectionById.get(clsId) ?? "";
-                // The cumulative third-term average is used for all sections; only the remarking differs by section.
                 const shouldUseCumulativeAverage = isThirdTerm;
                 const previousAverages = shouldUseCumulativeAverage
                     ? previousTermAveragesByStudent.get(stu.id) ?? { firstTermAverage: null, secondTermAverage: null }
                     : { firstTermAverage: null, secondTermAverage: null };
-                const firstTermAverage = previousAverages.firstTermAverage ?? 0;
-                const secondTermAverage = previousAverages.secondTermAverage ?? 0;
-                const cumulativeAverage = shouldUseCumulativeAverage
-                    ? (firstTermAverage + secondTermAverage + currentAverageScore) / 3
+                const averageScore = shouldUseCumulativeAverage
+                    ? calculateEffectiveAverage(currentAverageScore, previousAverages)
                     : currentAverageScore;
-                const averageScore = shouldUseCumulativeAverage ? cumulativeAverage : currentAverageScore;
                 const remark = isThirdTerm
                     ? getHeadTeacherRemark(averageScore, grading.term, section)
                     : generateRemark(averageScore, passMark ?? undefined);
