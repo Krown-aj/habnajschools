@@ -54,12 +54,15 @@ function normalizeTermName(term?: string | null): string {
     return String(term ?? "").trim().toLowerCase();
 }
 
+function isPrimaryOrNurserySection(section?: string | null): boolean {
+    const normalizedSection = String(section ?? "").trim().toLowerCase();
+    return normalizedSection === "primary" || normalizedSection === "nursery";
+}
+
 function getHeadTeacherRemark(average: number, term?: string | null, section?: string | null): string {
     const isThirdTerm = normalizeTermName(term) === "third";
-    const normalizedSection = String(section ?? "").trim().toLowerCase();
-    const isPrimaryOrNursery = normalizedSection === "primary" || normalizedSection === "nursery";
 
-    if (isThirdTerm && isPrimaryOrNursery) {
+    if (isThirdTerm && isPrimaryOrNurserySection(section)) {
         return average >= 40 ? "Promoted" : "Demoted";
     }
 
@@ -465,16 +468,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 const stat = totals.get(stu.id);
                 const totalScore = stat ? stat.total : 0;
                 const currentAverageScore = stat && stat.count > 0 ? stat.total / stat.count : 0;
-                const previousAverages = isThirdTerm
+                const section = classSectionById.get(clsId) ?? "";
+                // Only primary and nursery use the cumulative third-term average; secondary sections keep the normal term average.
+                const shouldUseCumulativeAverage = isThirdTerm && isPrimaryOrNurserySection(section);
+                const previousAverages = shouldUseCumulativeAverage
                     ? previousTermAveragesByStudent.get(stu.id) ?? { firstTermAverage: null, secondTermAverage: null }
                     : { firstTermAverage: null, secondTermAverage: null };
                 const firstTermAverage = previousAverages.firstTermAverage ?? 0;
                 const secondTermAverage = previousAverages.secondTermAverage ?? 0;
-                const cumulativeAverage = isThirdTerm
+                const cumulativeAverage = shouldUseCumulativeAverage
                     ? (firstTermAverage + secondTermAverage + currentAverageScore) / 3
                     : currentAverageScore;
-                const averageScore = isThirdTerm ? cumulativeAverage : currentAverageScore;
-                const section = classSectionById.get(clsId) ?? "";
+                const averageScore = shouldUseCumulativeAverage ? cumulativeAverage : currentAverageScore;
                 const remark = isThirdTerm
                     ? getHeadTeacherRemark(averageScore, grading.term, section)
                     : generateRemark(averageScore, passMark ?? undefined);
