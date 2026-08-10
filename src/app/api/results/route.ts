@@ -210,9 +210,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const currentGrading = gradingId
             ? await prisma.grading.findUnique({
                 where: { id: gradingId },
-                select: { id: true, term: true, session: true },
+                include: { gradingPolicy: true },
             })
             : null;
+        const passMark = currentGrading?.gradingPolicy?.passMark ?? null;
         const isThirdTerm = normalizeTermName(currentGrading?.term) === "third";
         const previousTermAveragesByStudent = new Map<string, PreviousTermAverages>();
 
@@ -422,15 +423,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                     ? calculateEffectiveAverage(currentAverageScore, previousTermAveragesByStudent.get(rc.student.id))
                     : currentAverageScore;
 
+                const computedRemark = isThirdTerm
+                    ? getHeadTeacherRemark(effectiveAverageScore, currentGrading?.term, rc.class.section)
+                    : generateRemark(effectiveAverageScore, passMark ?? undefined);
+                const computedFormmasterRemark = isThirdTerm && isPrimaryOrNurserySection(rc.class.section)
+                    ? computedRemark
+                    : null;
+
                 // Build the student-level grades object
                 const gradesObj = {
                     subjects: subjectsForStudent,
                     traits: traitsForStudent,
                     totalScore: rc.totalScore ?? 0,
                     averageScore: effectiveAverageScore,
-                    classPosition: rc.classPosition ?? null,
-                    formmasterRemark: rc.formmasterRemark ?? null,
-                    remark: rc.remark ?? null,
+                    classPosition: null as string | null,
+                    formmasterRemark: computedFormmasterRemark,
+                    remark: computedRemark,
                 };
 
                 // push student (grading) entry
@@ -447,6 +455,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
             // For each grading group create top-level object for this class
             for (const [gId, group] of gradingGroups.entries()) {
+                const sorted = [...group.gradings].sort((a: any, b: any) => b.grades.averageScore - a.grades.averageScore);
+                const positions: Record<string, number> = {};
+                let pos = 0;
+                let lastScore: number | null = null;
+
+                for (let i = 0; i < sorted.length; i++) {
+                    const score = Number(sorted[i].grades?.averageScore ?? 0);
+                    if (lastScore === null || score !== lastScore) {
+                        pos = i + 1;
+                    }
+                    positions[sorted[i].studentId] = pos;
+                    lastScore = score;
+                }
+
+                for (const entry of group.gradings) {
+                    const position = positions[entry.studentId];
+                    entry.grades.classPosition = typeof position === "number" ? ordinal(position) : null;
+                }
+
                 payload.push({
                     session: group.session,
                     term: group.term,
