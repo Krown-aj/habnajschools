@@ -1,0 +1,188 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { gradingUpdateSchema } from '@/lib/schemas/index';
+import { validateSession, validateRequestBody, handleError, successResponse, checkResourceExists, UserRole } from '@/lib/utils/api-helpers';
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+    try {
+        const { id } = await params;
+        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.TEACHER]);
+        if (validation.error) return validation.error;
+        const { session, userRole } = validation;
+        let teacherAssignments: { classid: string; subjectid: string }[] | undefined;
+        let formMasterClassIds: string[] | undefined;
+        if (userRole === UserRole.TEACHER) {
+            const [formMasterClasses, teacherLessons] = await Promise.all([
+                prisma.class.findMany({ where: { formmasterid: session!.user.id }, select: { id: true } }),
+                prisma.lesson.findMany({ where: { teacherid: session!.user.id }, select: { classid: true, subjectid: true } }),
+            ]);
+            formMasterClassIds = formMasterClasses.map(({ id }) => id);
+            teacherAssignments = teacherLessons;
+        }
+
+        const grading = await prisma.grading.findUnique({
+            where: { id },
+            include: {
+                gradingPolicy: {
+                    select: {
+                        id: true,
+                        title: true,
+                        passMark: true,
+                        maxScore: true,
+                    },
+                },
+                studentAssessments: {
+                    where: teacherAssignments ? {
+                        OR: teacherAssignments.map(({ classid, subjectid }) => ({ classId: classid, subjectId: subjectid })),
+                    } : undefined,
+                    select: {
+                        id: true,
+                        studentId: true,
+                        score: true,
+                        student: { select: { id: true, admissionnumber: true, firstname: true, surname: true, othername: true } },
+                        subject: { select: { id: true, name: true, category: true } },
+                        assessment: { select: { id: true, name: true, weight: true, maxScore: true } },
+                        class: { select: { id: true, name: true, section: true } },
+                        gradingId: true,
+                    }
+                },
+                studentGrades: {
+                    where: teacherAssignments ? {
+                        OR: teacherAssignments.map(({ classid, subjectid }) => ({ classId: classid, subjectId: subjectid })),
+                    } : undefined,
+                    select: {
+                        id: true,
+                        studentId: true,
+                        score: true,
+                        grade: true,
+                        remark: true,
+                        subjectPosition: true,
+                        assessments: { select: { id: true, name: true, weight: true, maxScore: true } },
+                        student: { select: { id: true, admissionnumber: true, firstname: true, surname: true, othername: true } },
+                        class: { select: { id: true, name: true, section: true } },
+                        subject: { select: { id: true, name: true, category: true } },
+                        gradingId: true,
+                    }
+                },
+                studentTraits: {
+                    where: formMasterClassIds ? { student: { classid: { in: formMasterClassIds } } } : undefined,
+                    select: {
+                        id: true,
+                        score: true,
+                        remark: true,
+                        trait: { select: { id: true, name: true, category: true } },
+                        student: { select: { id: true, admissionnumber: true, firstname: true, surname: true, othername: true } },
+                        gradingId: true
+                    }
+                },
+                _count: {
+                    select: {
+                        reportCards: true,
+                        studentGrades: true,
+                    },
+                },
+            },
+        });
+
+        if (!grading) return NextResponse.json({ error: 'Grading not found' }, { status: 404 });
+        return successResponse(grading);
+    } catch (error) {
+        return handleError(error, 'Failed to fetch grading');
+    }
+}
+
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+    try {
+        const { id } = await params;
+        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
+        if (validation.error) return validation.error;
+
+        const resourceCheck = await checkResourceExists(
+            prisma.grading,
+            id,
+            'Grading not found'
+        );
+        if (resourceCheck.error) return resourceCheck.error;
+
+        const bodyValidation = await validateRequestBody(request, gradingUpdateSchema);
+        if (bodyValidation.error) return bodyValidation.error;
+
+        const data = bodyValidation.data!;
+        const { title, session, term, section, published, gradingPolicyId } = data;
+
+        if (gradingPolicyId && session && term) {
+            const existing = await prisma.grading.findFirst({
+                where: {
+                    id: { not: id },
+                    gradingPolicyId,
+                    session,
+                    term,
+                },
+            });
+            if (existing) {
+                return NextResponse.json(
+                    { error: 'Grading already exists for the given session and term' },
+                    { status: 409 }
+                );
+            }
+        }
+
+        const updateData: any = {};
+        if (title !== undefined) updateData.title = title;
+        if (session !== undefined) updateData.session = session;
+        if (term !== undefined) updateData.term = term;
+        if (section !== undefined) updateData.section = section;
+        if (published !== undefined) updateData.published = published;
+        if (gradingPolicyId !== undefined) updateData.gradingPolicyId = gradingPolicyId;
+
+        const updatedGrading = await prisma.grading.update({
+            where: { id },
+            data: updateData,
+            include: {
+                gradingPolicy: {
+                    select: {
+                        id: true,
+                        title: true,
+                        passMark: true,
+                        maxScore: true,
+                    },
+                },
+            },
+        });
+
+        return successResponse(updatedGrading);
+    } catch (error) {
+        return handleError(error, 'Failed to update grading');
+    }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+    try {
+        const { id } = await params;
+        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
+        if (validation.error) return validation.error;
+
+        const resourceCheck = await checkResourceExists(
+            prisma.grading,
+            id,
+            'Grading not found'
+        );
+        if (resourceCheck.error) return resourceCheck.error;
+
+        await prisma.studentGrade.deleteMany({
+            where: { gradingId: id },
+        });
+
+        await prisma.reportCard.deleteMany({
+            where: { gradingId: id },
+        });
+
+        await prisma.grading.delete({
+            where: { id },
+        });
+
+        return successResponse({ message: 'Grading deleted successfully' });
+    } catch (error) {
+        return handleError(error, 'Failed to delete grading');
+    }
+}
