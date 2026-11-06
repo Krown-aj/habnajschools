@@ -9,7 +9,7 @@ This guide describes the system as it exists in the codebase. It is intended for
 ## At a glance
 
 The application is a Next.js website with two broad areas:
-
+ 
 1. **Public pages**, including the landing page, contact pages, school news, and photo gallery.
 2. **Authenticated dashboards** for super administrators, administrators, teachers, students, and parents.
 
