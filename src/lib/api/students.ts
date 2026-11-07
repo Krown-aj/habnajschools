@@ -2,6 +2,19 @@
  * Student-related client API helpers
  */
 import { Student as StudentModel } from '@/generated/prisma';
+import type { StudentAdmissionSchema } from '@/lib/schemas/index';
+
+export type StudentAdmissionResult = StudentModel & {
+    class: { id: string; name: string; category: string | null };
+    parent: {
+        id: string;
+        title: string;
+        firstname: string;
+        surname: string;
+        othername: string | null;
+        phone: string;
+    };
+};
 
 const DEFAULT_FETCH_OPTIONS: RequestInit = {
     method: 'GET',
@@ -58,7 +71,7 @@ export const fetchStudentById = async (id: string) => {
  * Create a new student
  * POST /api/students
  */
-export const createStudent = async (data: Partial<StudentModel>): Promise<StudentModel> => {
+export const createStudent = async (data: StudentAdmissionSchema): Promise<StudentAdmissionResult> => {
     const res = await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,14 +80,14 @@ export const createStudent = async (data: Partial<StudentModel>): Promise<Studen
     });
 
     const json = await parseJsonOrThrow(res, 'Failed to create student');
-    return (json?.data || json) as StudentModel;
+    return (json?.data || json) as StudentAdmissionResult;
 };
 
 /**
  * Update an existing student
  * PUT /api/students/:id
  */
-export const updateStudent = async (id: string, data: Partial<StudentModel>): Promise<StudentModel> => {
+export const updateStudent = async (id: string, data: Partial<StudentModel> & { correctionReason?: string }): Promise<StudentModel> => {
     const res = await fetch(`/api/students/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

@@ -4,6 +4,7 @@ import { Prisma } from '@/generated/prisma';
 import { parentUpdateSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, checkResourceExists, UserRole } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
+import { getCorrectionDiff } from '@/lib/record-corrections';
 
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -129,7 +130,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, parentUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, phone, address, password, active, avarta } = bodyValidation.data!;
+        const { title, firstname, surname, othername, birthday, bloodgroup, gender, occupation, religion, state, lga, phone, address, password, active, avarta, correctionReason } = bodyValidation.data!;
 
         // Check for phone conflicts
         if (phone) {
@@ -167,34 +168,85 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (active !== undefined && userRole !== UserRole.PARENT) updateData.active = active;
         if (avarta !== undefined) updateData.avarta = avarta;
 
-        const updatedParent = await prisma.parent.update({
-            where: { id: id },
-            data: updateData,
-            select: {
-                id: true,
-                title: true,
-                firstname: true,
-                surname: true,
-                othername: true,
-                email: true,
-                phone: true,
-                gender: true,
-                birthday: true,
-                bloodgroup: true,
-                occupation: true,
-                religion: true,
-                state: true,
-                lga: true,
-                address: true,
-                avarta: true,
-                active: true,
-                createdAt: true,
-                updatedAt: true
+        const correctionFields = ['title', 'firstname', 'surname', 'othername', 'birthday', 'bloodgroup', 'gender', 'occupation', 'religion', 'state', 'lga', 'phone', 'address'] as const;
+        const updatedParent = await prisma.$transaction(async (tx) => {
+            const currentParent = await tx.parent.findUnique({
+                where: { id },
+                select: {
+                    id: true,
+                    title: true,
+                    firstname: true,
+                    surname: true,
+                    othername: true,
+                    birthday: true,
+                    bloodgroup: true,
+                    gender: true,
+                    occupation: true,
+                    religion: true,
+                    state: true,
+                    lga: true,
+                    phone: true,
+                    address: true,
+                    updatedAt: true,
+                },
+            });
+            if (!currentParent) throw new Error('Parent not found');
+
+            const correction = getCorrectionDiff(currentParent, updateData, correctionFields);
+            if (correction && !correctionReason) {
+                throw new Error('A correction reason is required when changing guardian details.');
             }
+
+            const updated = await tx.parent.update({
+                where: { id, updatedAt: currentParent.updatedAt },
+                data: updateData,
+                select: {
+                    id: true,
+                    title: true,
+                    firstname: true,
+                    surname: true,
+                    othername: true,
+                    email: true,
+                    phone: true,
+                    gender: true,
+                    birthday: true,
+                    bloodgroup: true,
+                    occupation: true,
+                    religion: true,
+                    state: true,
+                    lga: true,
+                    address: true,
+                    avarta: true,
+                    active: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+            });
+
+            if (correction && correctionReason) {
+                await tx.recordCorrection.create({
+                    data: {
+                        recordType: 'PARENT',
+                        recordId: id,
+                        reason: correctionReason,
+                        before: correction.before,
+                        after: correction.after,
+                        actorId: session!.user.id,
+                        actorRole: userRole,
+                    },
+                });
+            }
+            return updated;
         });
 
         return successResponse(updatedParent);
     } catch (error) {
+        if (error instanceof Error && error.message === 'A correction reason is required when changing guardian details.') {
+            return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+            return NextResponse.json({ error: 'Guardian record was changed by another request. Reload the record and try again.' }, { status: 409 });
+        }
         return handleError(error, 'Failed to update parent');
     }
 }

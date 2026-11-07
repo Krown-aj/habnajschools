@@ -124,6 +124,7 @@ export default function Profile() {
         control,
         handleSubmit,
         reset,
+        register,
         formState: { errors },
     } = useForm({
         mode: "onBlur",
@@ -216,6 +217,7 @@ export default function Profile() {
         if (vals.address !== undefined) patch.address = vals.address;
         if (vals.state !== undefined) patch.state = vals.state;
         if (vals.lga !== undefined) patch.lga = vals.lga;
+        if ((role === "student" || role === "parent") && vals.correctionReason) patch.correctionReason = vals.correctionReason;
 
         try {
             await saveProfile(patch);
@@ -535,6 +537,21 @@ export default function Profile() {
                                             </div>
                                         );
                                     })}
+                                    {editMode && (role === "student" || role === "parent") && (
+                                        <div className="md:col-span-2 py-2">
+                                            <label htmlFor="profileCorrectionReason" className="mb-1 block text-sm text-white/80">
+                                                Correction reason
+                                            </label>
+                                            <InputTextarea
+                                                id="profileCorrectionReason"
+                                                rows={3}
+                                                {...register("correctionReason")}
+                                                placeholder="Required when correcting identity or contact details."
+                                                className="w-full"
+                                            />
+                                            <small className="text-white/70">Explain the change when updating identity or contact details.</small>
+                                        </div>
+                                    )}
                                 </form>
                             </div>
 

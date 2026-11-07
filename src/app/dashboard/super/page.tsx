@@ -15,6 +15,7 @@ import Announcements from "@/components/Events/Announcements";
 interface DashboardData {
     stats: {
         students: number;
+        studentsLeft: number;
         teachers: number;
         parents: number;
         classes: number;
@@ -123,6 +124,7 @@ const Super = () => {
             setDashboardData({
                 stats: {
                     students: 0,
+                    studentsLeft: 0,
                     teachers: 0,
                     parents: 0,
                     classes: 0,
@@ -233,15 +235,6 @@ const Super = () => {
                 {/* USER CARDS */}
                 <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
                     <UserCard
-                        type="admin"
-                        icon={Users}
-                        bgColor="bg-orange-100"
-                        color="text-orange-600"
-                        delta={`${dashboardData?.stats.administrations || 0} total`}
-                        deltaLabel="administrators"
-                        data={{ count: dashboardData?.stats.administrations || 0 }}
-                    />
-                    <UserCard
                         type="teacher"
                         icon={GraduationCap}
                         bgColor="bg-green-100"
@@ -258,6 +251,16 @@ const Super = () => {
                         delta={`${dashboardData?.stats.recentStudents || 0} new`}
                         deltaLabel="this month"
                         data={{ count: dashboardData?.stats.students || 0 }}
+                    />
+                    <UserCard
+                        type="student"
+                        title="Students Left"
+                        icon={Users}
+                        bgColor="bg-amber-100"
+                        color="text-amber-700"
+                        delta={`${dashboardData?.stats.studentsLeft || 0} total`}
+                        deltaLabel="withdrawn or graduated"
+                        data={{ count: dashboardData?.stats.studentsLeft || 0 }}
                     />
                     <UserCard
                         type="parent"

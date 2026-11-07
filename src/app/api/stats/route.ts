@@ -20,12 +20,14 @@ export async function GET(request: NextRequest) {
         }
 
         // Base stats (no school scoping since schema has no School model)
-        const baseStats = {
-            students: await prisma.student.count(),
-            teachers: await prisma.teacher.count(),
-            classes: await prisma.class.count(),
-            subjects: await prisma.subject.count(),
-        };
+        const [currentStudents, studentsLeft, teachers, classes, subjects] = await Promise.all([
+            prisma.student.count({ where: { enrollmentStatus: 'ENROLLED' } }),
+            prisma.student.count({ where: { enrollmentStatus: { in: ['WITHDRAWN', 'GRADUATED'] } } }),
+            prisma.teacher.count(),
+            prisma.class.count(),
+            prisma.subject.count(),
+        ]);
+        const baseStats = { students: currentStudents, studentsLeft, teachers, classes, subjects };
 
         // Role-specific stats
         let roleSpecificStats: any = {};
@@ -59,11 +61,13 @@ export async function GET(request: NextRequest) {
                     // Gender distribution for students
                     studentsByGender: await prisma.student.groupBy({
                         by: ['gender'],
+                        where: { enrollmentStatus: 'ENROLLED' },
                         _count: { _all: true },
                     }),
                     // Recent counts (last 30 days)
                     recentStudents: await prisma.student.count({
                         where: {
+                            enrollmentStatus: 'ENROLLED',
                             createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
                         },
                     }),
@@ -376,11 +380,12 @@ export async function GET(request: NextRequest) {
                 by: ['gender'],
                 where:
                     role === UserRole.PARENT
-                        ? { parentid: (session.user as any).id }
+                        ? { parentid: (session.user as any).id, enrollmentStatus: 'ENROLLED' }
                         : role === UserRole.STUDENT
-                            ? { id: (session.user as any).id }
+                            ? { id: (session.user as any).id, enrollmentStatus: 'ENROLLED' }
                             : role === UserRole.TEACHER
                                 ? {
+                                    enrollmentStatus: 'ENROLLED',
                                     class: {
                                         OR: [
                                             { formmasterid: (session.user as any).id },
@@ -388,7 +393,7 @@ export async function GET(request: NextRequest) {
                                         ],
                                     },
                                 }
-                                : undefined,
+                                : { enrollmentStatus: 'ENROLLED' },
                 _count: { _all: true },
             });
         }

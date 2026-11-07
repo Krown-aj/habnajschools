@@ -5,7 +5,9 @@ import {
     createStudent,
     updateStudent,
     deleteStudents,
+    type StudentAdmissionResult,
 } from '@/lib/api/students';
+import type { StudentAdmissionSchema } from '@/lib/schemas/index';
 import { Student as StudentType } from '@/generated/prisma';
 
 const DEFAULT_STALE_MS = 1000 * 60 * 2; // 2 minutes
@@ -46,14 +48,14 @@ const snapshotStudentsQueries = (qc: ReturnType<typeof useQueryClient>) => {
 
 export const useCreateStudent = () => {
     const qc = useQueryClient();
-    return useMutation<StudentType, Error, Partial<StudentType>>({
+    return useMutation<StudentAdmissionResult, Error, StudentAdmissionSchema>({
         mutationFn: (data) => createStudent(data),
         onMutate: async (newStudent) => {
             await qc.cancelQueries({ queryKey: ['students'] });
             const snapshot = snapshotStudentsQueries(qc);
 
             const optimisticId = (newStudent as any).id ?? `temp-${Date.now()}`;
-            const optimisticStudent = { ...(newStudent as StudentType), id: optimisticId } as StudentType;
+            const optimisticStudent = { ...(newStudent as unknown as StudentType), id: optimisticId } as StudentType;
 
             const listQueries = qc.getQueriesData({ queryKey: ['students'] });
             listQueries.forEach(([queryKey, currentData]) => {
@@ -82,7 +84,7 @@ export const useCreateStudent = () => {
 
 export const useUpdateStudent = () => {
     const qc = useQueryClient();
-    return useMutation<StudentType, Error, { id: string; data: Partial<StudentType> }>({
+    return useMutation<StudentType, Error, { id: string; data: Partial<StudentType> & { correctionReason?: string } }>({
         mutationFn: ({ id, data }) => updateStudent(id, data),
         onMutate: async ({ id, data }) => {
             await qc.cancelQueries({ queryKey: ['students'] });

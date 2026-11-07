@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { FaPlus } from "react-icons/fa";
-import { Trash2, Edit, Eye } from "lucide-react";
+import { Trash2, Edit, Eye, ArrowRightLeft } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "primereact/datatable";
@@ -43,6 +43,7 @@ const Students: React.FC<StudentsProps> = ({
 
     const role = session?.user?.role || 'Guest';
     const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin' || role.toLowerCase() === 'management';
+    const canManagePlacement = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin';
 
     // Determine the filtering parameters based on the user role
     const studentQueryParams = useMemo(() => {
@@ -192,6 +193,11 @@ const Students: React.FC<StudentsProps> = ({
                     icon: <Edit className="w-4 h-4 mr-2" />,
                     action: () => currentStudent && handleEdit(currentStudent)
                 },
+                ...(canManagePlacement ? [{
+                    label: "Promote / Transfer",
+                    icon: <ArrowRightLeft className="w-4 h-4 mr-2" />,
+                    action: () => currentStudent && router.push(`/dashboard/${role}/students/${currentStudent.id}/edit#class-placement`),
+                }] : []),
                 {
                     label: "Delete",
                     icon: <Trash2 className="w-4 h-4 mr-2" />,
@@ -206,7 +212,7 @@ const Students: React.FC<StudentsProps> = ({
                 action: () => currentStudent && handleView(currentStudent)
             },
         ];
-    }, [permit, deleteOne, handleEdit, handleView]);
+    }, [permit, canManagePlacement, role, router, deleteOne, handleEdit, handleView]);
 
     if (isLoading) {
         return (

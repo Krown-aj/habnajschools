@@ -5,6 +5,7 @@ import { Skeleton } from 'primereact/skeleton';
 
 interface Props {
     type: string;
+    title?: string;
     icon: typeof LucideIcon;
     bgColor?: string;
     color?: string;
@@ -16,6 +17,7 @@ interface Props {
 
 const UserCard: React.FC<Props> = ({
     type,
+    title,
     icon: Icon,
     bgColor = 'bg-blue-100',
     color = 'text-blue-500',
@@ -24,7 +26,7 @@ const UserCard: React.FC<Props> = ({
     data,
     loading = false,
 }) => {
-    const title = type.charAt(0).toUpperCase() + type.slice(1) + 's';
+    const cardTitle = title ?? type.charAt(0).toUpperCase() + type.slice(1) + 's';
 
     if (loading) {
         return (
@@ -50,7 +52,7 @@ const UserCard: React.FC<Props> = ({
             <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
                     <span className="block text-gray-600 font-semibold text-sm mb-2 group-hover:text-gray-800 transition-colors">
-                        {title}
+                        {cardTitle}
                     </span>
                     <div className="text-gray-900 font-bold text-2xl lg:text-3xl">
                         {data?.count?.toLocaleString() || '0'}

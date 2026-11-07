@@ -24,7 +24,8 @@ import {
      FileText,
      Database,
      School, */
-    CalendarDays
+    CalendarDays,
+    ArrowRightLeft
 
 } from "lucide-react";
 import LinkItem from './LinkItem';
@@ -37,7 +38,7 @@ const menuItems = [
                 icon: Home,
                 label: 'Dashboard',
                 href: (role: string) => `/dashboard/${role}`,
-                visible: ['admin', 'super', 'teacher', 'student', 'parent']
+                visible: ['admin', 'super', 'management', 'teacher', 'student', 'parent']
             },
             /* {
                 icon: BarChart3,
@@ -66,6 +67,12 @@ const menuItems = [
                 icon: GraduationCap,
                 label: 'Students',
                 href: (role: string) => `/dashboard/${role}/students`,
+                visible: ['admin', 'super', 'teacher']
+            },
+            {
+                icon: ArrowRightLeft,
+                label: 'Student Lifecycle',
+                href: (role: string) => `/dashboard/${role}/student-lifecycle`,
                 visible: ['admin', 'super', 'teacher']
             },
             {

@@ -5,12 +5,14 @@ import { useRouter, useParams } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { InputText } from "primereact/inputtext";
+import { InputTextarea } from "primereact/inputtextarea";
 import { Dropdown } from "primereact/dropdown";
 import { Button } from "primereact/button";
 import { Toast } from "primereact/toast";
 
-import { parentUpdateSchema, ParentSchema } from "@/lib/schemas/index";
+import { parentUpdateSchema, ParentUpdateSchema } from "@/lib/schemas/index";
 import Spinner from "@/components/Spinner/Spinner";
+import CorrectionHistory from "@/features/students/CorrectionHistory";
 import { useGetParentById, useUpdateParent } from "@/hooks/useParents";
 import { Parent as ParentType } from "@/generated/prisma";
 
@@ -55,7 +57,7 @@ const EditParent: React.FC = () => {
         reset,
         setValue,
         formState: { errors },
-    } = useForm({
+    } = useForm<ParentUpdateSchema>({
         resolver: zodResolver(parentUpdateSchema),
         mode: "onBlur",
         defaultValues: {
@@ -117,13 +119,13 @@ const EditParent: React.FC = () => {
 
     const handleBack = useCallback(() => router.back(), [router]);
 
-    const onSubmit = async (data: Partial<ParentSchema>) => {
+    const onSubmit = async (data: ParentUpdateSchema) => {
         if (!parentId) {
             show("error", "Invalid Parent", "Parent ID is missing.");
             return;
         }
 
-        const payload: Partial<ParentType> = {
+        const payload: Partial<ParentType> & { correctionReason?: string } = {
             ...data,
             birthday: data.birthday ? new Date(data.birthday) : undefined,
         };
@@ -238,6 +240,18 @@ const EditParent: React.FC = () => {
                         {errors.gender && <small className="p-error">{errors.gender.message}</small>}
                     </div>
 
+                    <div className="p-field">
+                        <label htmlFor="correctionReason">Correction reason</label>
+                        <InputTextarea
+                            id="correctionReason"
+                            rows={3}
+                            {...register("correctionReason")}
+                            placeholder="Required when correcting guardian identity or contact details."
+                            className={errors.correctionReason ? "p-invalid w-full" : "w-full"}
+                        />
+                        {errors.correctionReason && <small className="p-error">{errors.correctionReason.message}</small>}
+                    </div>
+
                     {/* Action Buttons */}
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
                         <Button label="Cancel" type="button" outlined onClick={handleBack} />
@@ -245,6 +259,7 @@ const EditParent: React.FC = () => {
                     </div>
                 </form>
             </div>
+            {parentId && <CorrectionHistory recordType="PARENT" recordId={parentId} />}
         </section>
     );
 };

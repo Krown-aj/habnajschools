@@ -10,8 +10,10 @@ import { Dropdown } from "primereact/dropdown";
 import { Calendar } from "primereact/calendar";
 import { Button } from "primereact/button";
 import { Toast } from "primereact/toast";
+import { Dialog } from "primereact/dialog";
 
-import { studentSchema, StudentSchema } from "@/lib/schemas/index";
+import { studentAdmissionSchema, type StudentAdmissionSchema } from "@/lib/schemas/index";
+import type { StudentAdmissionResult } from "@/lib/api/students";
 import Spinner from "@/components/Spinner/Spinner";
 import Uploader from "@/components/Uploader/Uploader";
 import { useGetClasses } from "@/hooks/useClasses";
@@ -71,6 +73,8 @@ const NewStudent: React.FC = () => {
     const router = useRouter();
     const toast = useRef<Toast>(null);
     const [uploaded, setUploaded] = useState<{ path: string; id: string; url?: string | null } | null>(null);
+    const [pendingAdmission, setPendingAdmission] = useState<StudentAdmissionSchema | null>(null);
+    const [createdAdmission, setCreatedAdmission] = useState<StudentAdmissionResult | null>(null);
 
     // Fetch all parents
     const { data: parentData, isLoading: isLoadingParents, isError: isErrorParents } = useGetParents();
@@ -84,12 +88,14 @@ const NewStudent: React.FC = () => {
         control,
         handleSubmit,
         reset,
+        watch,
+        setValue,
         formState: { errors },
     } = useForm({
-        resolver: zodResolver(studentSchema),
+        resolver: zodResolver(studentAdmissionSchema),
         mode: "onBlur",
         defaultValues: {
-            admissionnumber: "",
+            guardianMode: "existing" as const,
             firstname: "",
             surname: "",
             othername: "",
@@ -107,6 +113,9 @@ const NewStudent: React.FC = () => {
             classid: "",
         },
     });
+    const guardianMode = watch("guardianMode");
+    const selectedClassId = watch("classid");
+    const selectedClassData = classData?.find((schoolClass) => schoolClass.id === selectedClassId);
 
     // Transform parent data for the dropdown options, memoized for performance
     const parentOptions: Option[] = useMemo(() => {
@@ -153,14 +162,16 @@ const NewStudent: React.FC = () => {
         router.back();
     };
 
-    // A function to submit data using the useMutation hook
-    const onSubmit = async (data: StudentSchema) => {
-        const normalizedBirthday: Date | undefined =
-            data.birthday === undefined || data.birthday === null
-                ? undefined
-                : typeof data.birthday === "string"
-                    ? new Date(data.birthday)
-                    : data.birthday;
+    const onSubmit = (data: StudentAdmissionSchema) => {
+        setPendingAdmission(data);
+    };
+
+    const confirmAdmission = async () => {
+        if (!pendingAdmission) return;
+        const data = pendingAdmission;
+        const normalizedBirthday: Date = typeof data.birthday === "string"
+            ? new Date(data.birthday)
+            : data.birthday;
 
         const payload = {
             ...data,
@@ -170,17 +181,25 @@ const NewStudent: React.FC = () => {
         };
 
         try {
-            await createStudentMutation.mutateAsync(payload);
-            show("success", "Student Created", "New student has been created successfully.");
-            setTimeout(() => {
-                reset();
-                router.back();
-            }, 1500);
+            const created = await createStudentMutation.mutateAsync(payload);
+            setPendingAdmission(null);
+            setCreatedAdmission(created);
+            reset();
         } catch (err: any) {
             console.error("Mutation Error:", err);
             show("error", "Creation Error", err.message || "Failed to create new student record, please try again.");
         }
     };
+
+    const selectedParent = pendingAdmission?.guardianMode === "existing"
+        ? parentData?.find((parent) => parent.id === pendingAdmission.parentid)
+        : null;
+    const reviewGuardianName = pendingAdmission?.guardianMode === "new"
+        ? `${pendingAdmission.newGuardian.firstname} ${pendingAdmission.newGuardian.surname}`.trim()
+        : selectedParent
+            ? `${selectedParent.firstname} ${selectedParent.surname}`.trim()
+            : "Selected guardian";
+    const reviewClassName = classData?.find((schoolClass) => schoolClass.id === pendingAdmission?.classid)?.name ?? "Selected class";
 
     const loading = isLoadingParents || isLoadingClasses;
     const saving = createStudentMutation.isPending;
@@ -357,19 +376,23 @@ const NewStudent: React.FC = () => {
                         </div>
                         <div>
                             <label htmlFor="section">Section</label>
-                            <Controller
-                                name="section"
-                                control={control}
-                                render={({ field }) => (
-                                    <Dropdown
-                                        id="section"
-                                        {...field}
-                                        options={sectionOptions}
-                                        placeholder="Select Section"
-                                        className={errors.section ? "p-invalid w-full" : "w-full"}
-                                    />
-                                )}
-                            />
+                            {selectedClassData?.section ? (
+                                <InputText id="section" value={selectedClassData.section} readOnly className="w-full" />
+                            ) : (
+                                <Controller
+                                    name="section"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Dropdown
+                                            id="section"
+                                            {...field}
+                                            options={sectionOptions}
+                                            placeholder="Select Section"
+                                            className={errors.section ? "p-invalid w-full" : "w-full"}
+                                        />
+                                    )}
+                                />
+                            )}
                             {errors.section && <small className="p-error">{errors.section.message}</small>}
                         </div>
                     </div>
@@ -385,9 +408,30 @@ const NewStudent: React.FC = () => {
                         {errors.address && <small className="p-error">{errors.address.message}</small>}
                     </div>
 
-                    <div className="p-field grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="parentid">Parent/Guardians</label>
+                    <div className="p-field">
+                        <label htmlFor="guardianMode">Parent/Guardian</label>
+                        <Controller
+                            name="guardianMode"
+                            control={control}
+                            render={({ field }) => (
+                                <Dropdown
+                                    id="guardianMode"
+                                    value={field.value}
+                                    options={[
+                                        { label: "Link an existing parent/guardian", value: "existing" },
+                                        { label: "Create a new parent/guardian", value: "new" },
+                                    ]}
+                                    onChange={(e) => field.onChange(e.value)}
+                                    placeholder="Choose guardian option"
+                                    className="w-full"
+                                />
+                            )}
+                        />
+                    </div>
+
+                    {guardianMode === "existing" ? (
+                        <div className="p-field">
+                            <label htmlFor="parentid">Select Parent/Guardian</label>
                             <Controller
                                 name="parentid"
                                 control={control}
@@ -402,14 +446,63 @@ const NewStudent: React.FC = () => {
                                         filterPlaceholder="Search parent..."
                                         showClear
                                         placeholder="Select Parent"
-                                        className={errors.parentid ? "p-invalid w-full" : "w-full"}
+                                        className={(errors as any).parentid ? "p-invalid w-full" : "w-full"}
                                         disabled={loading} // Disable while loading
                                     />
                                 )}
                             />
-                            {errors.parentid && <small className="p-error">{errors.parentid.message}</small>}
+                            {(errors as any).parentid && <small className="p-error">{(errors as any).parentid.message}</small>}
                         </div>
-                        <div>
+                    ) : (
+                        <div className="space-y-4 rounded-lg border border-gray-200 p-4">
+                            <p className="font-medium text-gray-800">New parent/guardian account</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="newGuardian.title">Title</label>
+                                    <InputText id="newGuardian.title" {...register("newGuardian.title")} className="w-full" />
+                                    {(errors as any).newGuardian?.title && <small className="p-error">{(errors as any).newGuardian.title.message}</small>}
+                                </div>
+                                <div>
+                                    <label htmlFor="newGuardian.gender">Gender</label>
+                                    <Controller
+                                        name="newGuardian.gender"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Dropdown id="newGuardian.gender" {...field} options={genderOptions} placeholder="Select Gender" className="w-full" />
+                                        )}
+                                    />
+                                    {(errors as any).newGuardian?.gender && <small className="p-error">{(errors as any).newGuardian.gender.message}</small>}
+                                </div>
+                                <div>
+                                    <label htmlFor="newGuardian.firstname">First Name</label>
+                                    <InputText id="newGuardian.firstname" {...register("newGuardian.firstname")} className="w-full" />
+                                    {(errors as any).newGuardian?.firstname && <small className="p-error">{(errors as any).newGuardian.firstname.message}</small>}
+                                </div>
+                                <div>
+                                    <label htmlFor="newGuardian.surname">Surname</label>
+                                    <InputText id="newGuardian.surname" {...register("newGuardian.surname")} className="w-full" />
+                                    {(errors as any).newGuardian?.surname && <small className="p-error">{(errors as any).newGuardian.surname.message}</small>}
+                                </div>
+                                <div>
+                                    <label htmlFor="newGuardian.othername">Other Name</label>
+                                    <InputText id="newGuardian.othername" {...register("newGuardian.othername")} className="w-full" />
+                                </div>
+                                <div>
+                                    <label htmlFor="newGuardian.phone">Phone (login username)</label>
+                                    <InputText id="newGuardian.phone" {...register("newGuardian.phone")} className="w-full" />
+                                    {(errors as any).newGuardian?.phone && <small className="p-error">{(errors as any).newGuardian.phone.message}</small>}
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="newGuardian.password">Unique initial password (at least 12 characters)</label>
+                                <InputText id="newGuardian.password" type="password" autoComplete="new-password" {...register("newGuardian.password")} className="w-full" />
+                                {(errors as any).newGuardian?.password && <small className="p-error">{(errors as any).newGuardian.password.message}</small>}
+                                <small className="block mt-1">Share it privately with the guardian and ask them to change it after signing in.</small>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="p-field">
                             <label htmlFor="classid">Class</label>
                             <Controller
                                 name="classid"
@@ -419,6 +512,11 @@ const NewStudent: React.FC = () => {
                                         id="classid"
                                         {...field}
                                         options={classOptions} // Use memoized data
+                                        onChange={(e) => {
+                                            field.onChange(e.value);
+                                            const selectedClass = classData?.find((schoolClass) => schoolClass.id === e.value);
+                                            if (selectedClass?.section) setValue("section", selectedClass.section);
+                                        }}
                                         placeholder="Select Class"
                                         className={errors.classid ? "p-invalid w-full" : "w-full"}
                                         disabled={loading} // Disable while loading
@@ -426,7 +524,6 @@ const NewStudent: React.FC = () => {
                                 )}
                             />
                             {errors.classid && <small className="p-error">{errors.classid.message}</small>}
-                        </div>
                     </div>
 
                     <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row justify-end gap-2 mt-3">
@@ -437,15 +534,54 @@ const NewStudent: React.FC = () => {
                             onClick={handleBack}
                         />
                         <Button
-                            label="Save"
+                            label="Review Admission"
                             type="submit"
                             className="p-button-primary"
-                            loading={saving}
                             disabled={saving || loading}
                         />
                     </div>
                 </form>
             </div>
+
+            <Dialog
+                header="Review admission"
+                visible={Boolean(pendingAdmission)}
+                onHide={() => setPendingAdmission(null)}
+                footer={(
+                    <div className="flex justify-end gap-2">
+                        <Button label="Back to form" outlined onClick={() => setPendingAdmission(null)} disabled={saving} />
+                        <Button label="Confirm admission" onClick={confirmAdmission} loading={saving} disabled={saving} />
+                    </div>
+                )}
+            >
+                <p>Check these details before creating the official student record.</p>
+                <dl className="mt-4 grid grid-cols-1 gap-3">
+                    <div><dt className="font-semibold">Student</dt><dd>{`${pendingAdmission?.firstname ?? ""} ${pendingAdmission?.othername ?? ""} ${pendingAdmission?.surname ?? ""}`.trim()}</dd></div>
+                    <div><dt className="font-semibold">Class</dt><dd>{reviewClassName}</dd></div>
+                    <div><dt className="font-semibold">Parent/guardian</dt><dd>{reviewGuardianName}</dd></div>
+                    {pendingAdmission?.guardianMode === "new" && <div><dt className="font-semibold">Guardian phone</dt><dd>{pendingAdmission.newGuardian.phone}</dd></div>}
+                </dl>
+            </Dialog>
+
+            <Dialog
+                header="Admission completed"
+                visible={Boolean(createdAdmission)}
+                closable={false}
+                onHide={() => undefined}
+                footer={<Button label="Done" onClick={() => { setCreatedAdmission(null); router.back(); }} />}
+            >
+                {createdAdmission && (
+                    <div className="space-y-2">
+                        <p>The student record and guardian link were saved.</p>
+                        <p><strong>Admission number:</strong> {createdAdmission.admissionnumber}</p>
+                        <p><strong>Student:</strong> {`${createdAdmission.firstname} ${createdAdmission.othername ?? ""} ${createdAdmission.surname}`.trim()}</p>
+                        <p><strong>Class:</strong> {createdAdmission.class.name}</p>
+                        <p><strong>Parent/guardian:</strong> {`${createdAdmission.parent.title} ${createdAdmission.parent.firstname} ${createdAdmission.parent.surname}`.trim()}</p>
+                        <p><strong>Guardian login username:</strong> {createdAdmission.parent.phone}</p>
+                        <p className="text-sm text-gray-600">The guardian's unique initial password was set in the form. Share it privately.</p>
+                    </div>
+                )}
+            </Dialog>
         </section>
     );
 };

@@ -1,0 +1,1 @@
+ALTER TYPE "PromotionStatus" ADD VALUE 'REENROLLED';

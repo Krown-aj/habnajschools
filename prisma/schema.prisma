@@ -44,6 +44,7 @@ model Student {
   classid            String
   createdAt          DateTime            @default(now())
   active             Boolean             @default(true)
+  enrollmentStatus   EnrollmentStatus    @default(ENROLLED)
   updatedAt          DateTime            @updatedAt
   section            String?
   answers            Answer[]
@@ -59,6 +60,24 @@ model Student {
   traits             StudentTrait[]
   submissions        Submission[]
   assignments        Assignment[]        @relation("AssignmentToStudent")
+}
+
+// Append-only correction history for sensitive student and guardian identity fields.
+// Snapshot values are stored without relational cascades so the history survives record removal.
+model RecordCorrection {
+  id         String   @id @default(cuid())
+  recordType String
+  recordId   String
+  studentId  String?
+  reason     String   @db.VarChar(1000)
+  before     Json
+  after      Json
+  actorId    String
+  actorRole  String
+  createdAt  DateTime @default(now())
+
+  @@index([recordType, recordId, createdAt])
+  @@index([studentId, createdAt])
 }
 
 model Teacher {
@@ -427,6 +446,7 @@ model StudentPromotion {
   promotedAt  DateTime        @default(now())
   status      PromotionStatus
   remark      String?
+  actorId     String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   fromClass   Class           @relation("FromClass", fields: [fromClassId], references: [id])
@@ -602,6 +622,14 @@ enum TraitCategory {
 enum PromotionStatus {
   PROMOTED
   REPEATED
+  TRANSFERRED
+  GRADUATED
+  WITHDRAWN
+  REENROLLED
+}
+
+enum EnrollmentStatus {
+  ENROLLED
   GRADUATED
   WITHDRAWN
 }

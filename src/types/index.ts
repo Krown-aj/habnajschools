@@ -17,6 +17,7 @@ export interface Teacher {
 export interface Class {
     id: string;
     name: string;
+    section?: string | null;
 }
 
 export interface Subject {

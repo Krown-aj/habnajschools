@@ -71,7 +71,7 @@ export const createParent = async (data: Partial<ParentModel>): Promise<ParentMo
  * Update an existing parent
  * PUT /api/parents/:id
  */
-export const updateParent = async (id: string, data: Partial<ParentModel>): Promise<ParentModel> => {
+export const updateParent = async (id: string, data: Partial<ParentModel> & { correctionReason?: string }): Promise<ParentModel> => {
     const res = await fetch(`/api/parents/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

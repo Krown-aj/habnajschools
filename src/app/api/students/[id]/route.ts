@@ -4,6 +4,7 @@ import { Prisma } from '@/generated/prisma';
 import { studentUpdateSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, UserRole } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
+import { getCorrectionDiff } from '@/lib/record-corrections';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
@@ -114,7 +115,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const bodyValidation = await validateRequestBody(request, studentUpdateSchema);
         if (bodyValidation.error) return bodyValidation.error;
 
-        const { firstname, surname, othername, birthday, gender, religion, house, bloodgroup, admissiondate, /* email, phone, */ address, state, lga, avarta, password, active, parentid, classid, section } = bodyValidation.data!;
+        const { firstname, surname, othername, birthday, gender, religion, house, bloodgroup, admissiondate, /* email, phone, */ address, state, lga, avarta, password, active, parentid, classid, section, correctionReason } = bodyValidation.data!;
 
         // Enrollment, identity, account status, and password changes belong to authorized staff.
         // Students may update only their own profile fields, never official placement or account data.
@@ -198,28 +199,81 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (parentid) updateData.parentid = parentid;
         if (classid) updateData.classid = classid;
 
-        const updatedStudent = await prisma.student.update({
-            where: { id: id },
-            data: updateData,
-            select: {
-                id: true,
-                admissionnumber: true,
-                firstname: true,
-                surname: true,
-                email: true,
-                phone: true,
-                section: true,
-                gender: true,
-                active: true,
-                classid: true,
-                parentid: true,
-                createdAt: true,
-                updatedAt: true
+        const correctionFields = ['firstname', 'surname', 'othername', 'birthday', 'gender', 'parentid'] as const;
+        const updatedStudent = await prisma.$transaction(async (tx) => {
+            const currentStudent = await tx.student.findUnique({
+                where: { id },
+                select: {
+                    id: true,
+                    firstname: true,
+                    surname: true,
+                    othername: true,
+                    birthday: true,
+                    gender: true,
+                    parentid: true,
+                    classid: true,
+                    section: true,
+                    updatedAt: true,
+                },
+            });
+            if (!currentStudent) throw new Error('Student not found');
+            if ((classid && classid !== currentStudent.classid) || (section && section !== currentStudent.section)) {
+                throw new Error('Class and section changes must use the promotion or transfer workflow.');
             }
+
+            const correction = getCorrectionDiff(currentStudent, updateData, correctionFields);
+            if (correction && !correctionReason) {
+                throw new Error('A correction reason is required when changing student identity or guardian details.');
+            }
+
+            const updated = await tx.student.update({
+                where: { id, updatedAt: currentStudent.updatedAt },
+                data: updateData,
+                select: {
+                    id: true,
+                    admissionnumber: true,
+                    firstname: true,
+                    surname: true,
+                    email: true,
+                    phone: true,
+                    section: true,
+                    gender: true,
+                    active: true,
+                    classid: true,
+                    parentid: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+            });
+
+            if (correction && correctionReason) {
+                await tx.recordCorrection.create({
+                    data: {
+                        recordType: 'STUDENT',
+                        recordId: id,
+                        studentId: id,
+                        reason: correctionReason,
+                        before: correction.before,
+                        after: correction.after,
+                        actorId: session!.user.id,
+                        actorRole: userRole,
+                    },
+                });
+            }
+            return updated;
         });
 
         return successResponse(updatedStudent);
     } catch (error) {
+        if (error instanceof Error && error.message === 'A correction reason is required when changing student identity or guardian details.') {
+            return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+        if (error instanceof Error && error.message === 'Class and section changes must use the promotion or transfer workflow.') {
+            return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+            return NextResponse.json({ error: 'Student was changed by another request. Reload the record and try again.' }, { status: 409 });
+        }
         return handleError(error, 'Failed to update student');
     }
 }

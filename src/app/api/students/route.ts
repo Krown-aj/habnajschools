@@ -1,9 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@/generated/prisma';
 import prisma from '@/lib/prisma';
-import { studentSchema } from '@/lib/schemas/index';
+import { studentAdmissionSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, UserRole } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
+
+const studentAdmissionResponseSelect = {
+  id: true,
+  admissionnumber: true,
+  firstname: true,
+  surname: true,
+  othername: true,
+  email: true,
+  phone: true,
+  gender: true,
+  birthday: true,
+  avarta: true,
+  address: true,
+  section: true,
+  state: true,
+  lga: true,
+  house: true,
+  bloodgroup: true,
+  active: true,
+  class: { select: { id: true, name: true, category: true } },
+  parent: { select: { id: true, title: true, firstname: true, surname: true, othername: true, phone: true } },
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.StudentSelect;
 
 const generateAdmissionNumber = (
   existingAdmissions: string[] = [],
@@ -23,6 +47,15 @@ const generateAdmissionNumber = (
   const nextSequence = sequences.length === 0 ? baseSequence : Math.max(...sequences) + 1;
   const paddedSequence = nextSequence.toString().padStart(5, '0');
   return `${safePrefix}/${yearStr}/${paddedSequence}`;
+};
+
+const isAdmissionNumberConflict = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'P2002') return false;
+  const target = 'meta' in error && error.meta && typeof error.meta === 'object' && 'target' in error.meta
+    ? error.meta.target
+    : undefined;
+  const targetDescription = Array.isArray(target) ? target.join(' ') : String(target ?? '');
+  return targetDescription.toLocaleLowerCase().includes('admissionnumber');
 };
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -169,12 +202,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
+    const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN]);
     if (validation.error) return validation.error;
 
-    const bodyValidation = await validateRequestBody(request, studentSchema);
+    const bodyValidation = await validateRequestBody(request, studentAdmissionSchema);
     if (bodyValidation.error) return bodyValidation.error;
 
+    const admission = bodyValidation.data!;
     const {
       firstname,
       surname,
@@ -192,104 +226,114 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       avarta,
       password,
       active,
-      parentid,
       classid,
-    } = bodyValidation.data!;
+    } = admission;
+    const guardianMode = admission.guardianMode;
+    const parentid = guardianMode === 'existing' ? admission.parentid : undefined;
+    const newGuardian = guardianMode === 'new' ? admission.newGuardian : undefined;
 
-    const parent = await prisma.parent.findUnique({ where: { id: parentid } });
-    if (!parent) {
-      return NextResponse.json({ error: 'Invalid parent ID' }, { status: 400 });
+    if (guardianMode === 'existing' && parentid) {
+      const parent = await prisma.parent.findUnique({ where: { id: parentid }, select: { id: true } });
+      if (!parent) {
+        return NextResponse.json({ error: 'Selected parent or guardian was not found' }, { status: 400 });
+      }
     }
 
     const classData = await prisma.class.findUnique({
       where: { id: classid },
-      select: { id: true, capacity: true, _count: { select: { students: true } } },
+      select: { id: true, name: true, section: true, capacity: true, _count: { select: { students: true } } },
     });
     if (!classData) {
       return NextResponse.json({ error: 'Invalid class ID' }, { status: 400 });
     }
 
-    const existingAdmissions = await prisma.student.findMany({ select: { admissionnumber: true } });
-    const admissionNumbers: string[] = existingAdmissions.map((s) => s.admissionnumber).filter((n): n is string => !!n);
-    const admissionnumber = generateAdmissionNumber(admissionNumbers, new Date(), 'HAB');
-
-    const existingStudent = await prisma.student.findFirst({
-      where: { OR: [{ admissionnumber }] },
-    });
-
-    if (existingStudent) {
-      return NextResponse.json(
-        {
-          error: existingStudent.admissionnumber === admissionnumber ? 'Admission number already exists' : 'Phone already exists',
-        },
-        { status: 409 }
-      );
+    if (classData.section && classData.section.toLocaleUpperCase() !== section.toLocaleUpperCase()) {
+      return NextResponse.json({ error: 'Selected class does not belong to the selected school section' }, { status: 400 });
     }
 
-    const hashedPassword = password ? await bcrypt.hash(password, 12) : null;
+    const [hashedPassword, hashedGuardianPassword] = await Promise.all([
+      bcrypt.hash(password, 12),
+      guardianMode === 'new' && newGuardian ? bcrypt.hash(newGuardian.password, 12) : Promise.resolve(null),
+    ]);
 
-    const newStudent = await prisma.student.create({
-      data: {
-        admissionnumber,
-        firstname,
-        surname,
-        othername,
-        birthday,
-        gender,
-        religion,
-        house,
-        bloodgroup,
-        admissiondate,
-        section,
-        address,
-        state,
-        lga,
-        avarta,
-        password: hashedPassword,
-        active,
-        parentid,
-        classid,
-      },
-      select: {
-        id: true,
-        admissionnumber: true,
-        firstname: true,
-        surname: true,
-        othername: true,
-        email: true,
-        phone: true,
-        gender: true,
-        birthday: true,
-        avarta: true,
-        address: true,
-        section: true,
-        state: true,
-        lga: true,
-        house: true,
-        bloodgroup: true,
-        active: true,
-        class: {
-          select: {
-            id: true,
-            name: true,
-            category: true,
-          },
-        },
-        parent: {
-          select: {
-            id: true,
-            firstname: true,
-            surname: true,
-            othername: true,
-          },
-        },
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    // Read and allocate within the same transaction as the insert. If another
+    // request wins the unique-index race, retry only that admission-number conflict.
+    const maxAdmissionNumberAttempts = 5;
+    let newStudent: Prisma.StudentGetPayload<{ select: typeof studentAdmissionResponseSelect }> | undefined;
+    for (let attempt = 0; attempt < maxAdmissionNumberAttempts; attempt += 1) {
+      try {
+        newStudent = await prisma.$transaction(async (tx) => {
+          const existingAdmissions = await tx.student.findMany({ select: { admissionnumber: true } });
+          const admissionnumber = generateAdmissionNumber(
+            existingAdmissions.map((student) => student.admissionnumber),
+            new Date(),
+            'HAB'
+          );
+
+          let linkedParentId = parentid;
+          if (guardianMode === 'new' && newGuardian && hashedGuardianPassword) {
+            const guardian = await tx.parent.create({
+              data: {
+                title: newGuardian.title,
+                firstname: newGuardian.firstname,
+                surname: newGuardian.surname,
+                othername: newGuardian.othername,
+                gender: newGuardian.gender,
+                phone: newGuardian.phone,
+                password: hashedGuardianPassword,
+                active: true,
+              },
+              select: { id: true },
+            });
+            linkedParentId = guardian.id;
+          }
+
+          return tx.student.create({
+            data: {
+              admissionnumber,
+              firstname,
+              surname,
+              othername,
+              birthday,
+              gender,
+              religion,
+              house,
+              bloodgroup,
+              admissiondate,
+              section: classData.section ?? section,
+              address,
+              state,
+              lga,
+              avarta,
+              password: hashedPassword,
+              active,
+              parentid: linkedParentId!,
+              classid,
+            },
+            select: studentAdmissionResponseSelect,
+          });
+        });
+        break;
+      } catch (error) {
+        if (!isAdmissionNumberConflict(error)) throw error;
+        if (attempt === maxAdmissionNumberAttempts - 1) {
+          return NextResponse.json(
+            { error: 'Admission number allocation is temporarily busy. Please try again.' },
+            { status: 503 }
+          );
+        }
+      }
+    }
+
+    if (!newStudent) {
+      return NextResponse.json({ error: 'Unable to allocate an admission number' }, { status: 503 });
+    }
 
     return successResponse(newStudent, 201);
   } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+      return NextResponse.json({ error: 'A guardian phone number or admission number already exists' }, { status: 409 });
+    }
     return handleError(error, 'Failed to create student');
   }
 }

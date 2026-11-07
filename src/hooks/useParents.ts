@@ -77,7 +77,7 @@ export const useCreateParent = () => {
 
 export const useUpdateParent = () => {
     const qc = useQueryClient();
-    return useMutation<ParentType, Error, { id: string; data: Partial<ParentType> }>({
+    return useMutation<ParentType, Error, { id: string; data: Partial<ParentType> & { correctionReason?: string } }>({
         mutationFn: ({ id, data }) => updateParent(id, data),
         onMutate: async ({ id, data }) => {
             await qc.cancelQueries({ queryKey: ['parents'] });

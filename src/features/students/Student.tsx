@@ -81,6 +81,11 @@ const Student: React.FC<StudentProps> = () => {
     const canEditAvatar = ["super", "admin", "management", "student"].includes(
         String(session?.user?.role ?? "").toLowerCase()
     );
+    const canManagePlacement = ["super", "admin"].includes(String(session?.user?.role ?? "").toLowerCase());
+    const openPlacementWorkflow = () => {
+        const role = String(session?.user?.role ?? "admin").toLowerCase();
+        if (studentId) router.push(`/dashboard/${role}/students/${studentId}/edit#class-placement`);
+    };
 
     // Use memoized values for image props
     const imageProps = useMemo(() => {
@@ -146,7 +151,15 @@ const Student: React.FC<StudentProps> = () => {
                         </div>
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-3">
+                        {canManagePlacement && (
+                            <Button
+                                icon="pi pi-arrow-right"
+                                label="Promote / Transfer"
+                                onClick={openPlacementWorkflow}
+                                className="bg-indigo-600 border border-indigo-600 rounded-xl text-xs sm:text-sm font-medium text-white hover:bg-indigo-700 transition-all duration-300"
+                            />
+                        )}
                         <Button
                             icon="pi pi-arrow-left"
                             label="Back"
