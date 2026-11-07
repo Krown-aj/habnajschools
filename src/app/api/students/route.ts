@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@/generated/prisma';
 import prisma from '@/lib/prisma';
-import { studentAdmissionSchema } from '@/lib/schemas/index';
+import { studentAdmissionSchema, studentDeletionSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, UserRole } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
 
@@ -340,8 +340,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
-    const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
+    const validation = await validateSession([UserRole.SUPER]);
     if (validation.error) return validation.error;
+    const bodyValidation = await validateRequestBody(request, studentDeletionSchema);
+    if (bodyValidation.error) return bodyValidation.error;
+    const { reason } = bodyValidation.data!;
 
     const url = new URL(request.url);
     const ids = url.searchParams.getAll('ids');
@@ -349,9 +352,48 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     if (ids.length === 0) {
       return NextResponse.json({ error: 'No IDs provided' }, { status: 400 });
     }
+    if (ids.length > 100 || new Set(ids).size !== ids.length) {
+      return NextResponse.json({ error: 'Select up to 100 unique student records.' }, { status: 400 });
+    }
 
-    const result = await prisma.student.deleteMany({
-      where: { id: { in: ids } },
+    const result = await prisma.$transaction(async (tx) => {
+      const students = await tx.student.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          admissionnumber: true,
+          firstname: true,
+          othername: true,
+          surname: true,
+          enrollmentStatus: true,
+          classid: true,
+          section: true,
+        },
+      });
+      if (students.length !== ids.length) throw new Error('STUDENT_NOT_FOUND');
+
+      await tx.recordCorrection.createMany({
+        data: students.map((student) => ({
+          recordType: 'STUDENT_DELETION',
+          recordId: student.id,
+          studentId: student.id,
+          reason,
+          before: {
+            admissionnumber: student.admissionnumber,
+            firstname: student.firstname,
+            othername: student.othername,
+            surname: student.surname,
+            enrollmentStatus: student.enrollmentStatus,
+            classid: student.classid,
+            section: student.section,
+          },
+          after: { deleted: true },
+          actorId: validation.session!.user.id,
+          actorRole: validation.userRole,
+        })),
+      });
+
+      return tx.student.deleteMany({ where: { id: { in: ids } } });
     });
 
     return successResponse({
@@ -359,6 +401,12 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       message: `Successfully deleted ${result.count} students`,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'STUDENT_NOT_FOUND') {
+      return NextResponse.json({ error: 'One or more student records were not found. Nothing was deleted.' }, { status: 404 });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      return NextResponse.json({ error: 'One or more students have linked school records and cannot be permanently deleted. Use the withdrawal or graduation workflow instead.' }, { status: 409 });
+    }
     return handleError(error, 'Failed to delete students');
   }
 }

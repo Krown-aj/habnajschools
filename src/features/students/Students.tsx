@@ -9,9 +9,10 @@ import { DataTable } from "primereact/datatable";
 import type { DataTableFilterMeta, DataTableFilterMetaData } from "primereact/datatable";
 import { Column } from "primereact/column";
 import { InputText } from "primereact/inputtext";
+import { InputTextarea } from "primereact/inputtextarea";
 import { Button } from "primereact/button";
 import { OverlayPanel } from "primereact/overlaypanel";
-import { confirmDialog } from "primereact/confirmdialog";
+import { Dialog } from "primereact/dialog";
 import { FilterMatchMode } from "primereact/api";
 import { Toast } from "primereact/toast";
 
@@ -34,6 +35,9 @@ const Students: React.FC<StudentsProps> = ({
     const { data: session } = useSession();
     const [selected, setSelected] = useState<StudentType[]>([]);
     const [current, setCurrent] = useState<StudentType | null>(null);
+    const [deleteIds, setDeleteIds] = useState<string[]>([]);
+    const [deleteReason, setDeleteReason] = useState("");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const toast = useRef<Toast>(null);
     const panel = useRef<OverlayPanel>(null);
 
@@ -44,6 +48,7 @@ const Students: React.FC<StudentsProps> = ({
     const role = session?.user?.role || 'Guest';
     const permit = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin' || role.toLowerCase() === 'management';
     const canManagePlacement = role.toLowerCase() === 'super' || role.toLowerCase() === 'admin';
+    const canHardDelete = role.toLowerCase() === 'super';
 
     // Determine the filtering parameters based on the user role
     const studentQueryParams = useMemo(() => {
@@ -98,54 +103,41 @@ const Students: React.FC<StudentsProps> = ({
         }
     }, [fetchError, show]);
 
-    // A helper function to confirm user's action and trigger mutation
-    const confirmDelete = useCallback(
+    // Hard deletion is restricted to Super and requires a reason for the audit trail.
+    const requestDelete = useCallback(
         (ids: string[]) => {
-            confirmDialog({
-                message:
-                    ids.length === 1
-                        ? "Do you really want to delete this student record?"
-                        : `Do you really want to delete these ${ids.length} student records?`,
-                header: "Confirm Deletion",
-                icon: "pi pi-exclamation-triangle",
-                acceptClassName: "p-button-danger",
-                rejectClassName: "p-button-text",
-                accept: () => {
-                    interface ErrorLike { message?: string }
-                    interface DeleteStudentsMutationOptions {
-                        onSuccess?: () => void;
-                        onError?: (error: ErrorLike | unknown) => void;
-                    }
-
-                    deleteStudentsMutation(ids, {
-                        onSuccess: (): void => {
-                            show(
-                                "success",
-                                "Deleted",
-                                ids.length === 1
-                                    ? "Student record deleted successfully."
-                                    : `${ids.length} student records deleted successfully.`
-                            );
-                            setSelected((prev: StudentType[]) => prev.filter(s => !ids.includes(s.id)));
-                        },
-                        onError: (err: unknown): void => {
-                            const message = (err as ErrorLike)?.message || "Failed to delete student record, please try again.";
-                            show("error", "Deletion Error", message);
-                        },
-                    } as DeleteStudentsMutationOptions);
-                },
-            });
+            if (!canHardDelete) return;
+            setDeleteIds(ids);
+            setDeleteReason("");
+            setDeleteDialogOpen(true);
         },
-        [show, deleteStudentsMutation]
+        [canHardDelete]
     );
+
+    const confirmDelete = useCallback(() => {
+        if (deleteReason.trim().length < 10) {
+            show("warn", "Reason required", "Enter at least 10 characters explaining why permanent deletion is necessary.");
+            return;
+        }
+        deleteStudentsMutation({ ids: deleteIds, reason: deleteReason.trim() }, {
+            onSuccess: () => {
+                show("success", "Deleted", `${deleteIds.length} student record(s) deleted and audited.`);
+                setSelected((prev) => prev.filter((student) => !deleteIds.includes(student.id)));
+                setDeleteDialogOpen(false);
+                setDeleteIds([]);
+                setDeleteReason("");
+            },
+            onError: (error) => show("error", "Deletion Error", error.message || "Failed to delete student record."),
+        });
+    }, [deleteReason, deleteIds, deleteStudentsMutation, show]);
 
     // A helper function to delete single record
     const deleteOne = useCallback(
         (id: string) => {
-            confirmDelete([id]);
+            requestDelete([id]);
             panel.current?.hide();
         },
-        [confirmDelete]
+        [requestDelete]
     );
 
     // A helper function to handle navigation to new page
@@ -198,11 +190,11 @@ const Students: React.FC<StudentsProps> = ({
                     icon: <ArrowRightLeft className="w-4 h-4 mr-2" />,
                     action: () => currentStudent && router.push(`/dashboard/${role}/students/${currentStudent.id}/edit#class-placement`),
                 }] : []),
-                {
+                ...(canHardDelete ? [{
                     label: "Delete",
                     icon: <Trash2 className="w-4 h-4 mr-2" />,
                     action: () => currentStudent && deleteOne(currentStudent.id)
-                }
+                }] : [])
             ];
         }
         return [
@@ -212,7 +204,7 @@ const Students: React.FC<StudentsProps> = ({
                 action: () => currentStudent && handleView(currentStudent)
             },
         ];
-    }, [permit, canManagePlacement, role, router, deleteOne, handleEdit, handleView]);
+    }, [permit, canManagePlacement, canHardDelete, role, router, deleteOne, handleEdit, handleView]);
 
     if (isLoading) {
         return (
@@ -288,7 +280,7 @@ const Students: React.FC<StudentsProps> = ({
                         emptyMessage="No students found."
                         selectionMode="multiple"
                     >
-                        {permit && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
+                        {canHardDelete && <Column selectionMode="multiple" headerStyle={{ width: "3em" }} />}
 
                         <Column field="admissionnumber" header="Admission Number" sortable />
 
@@ -317,13 +309,13 @@ const Students: React.FC<StudentsProps> = ({
                     </DataTable>
                 </div>
             </div>
-            {selected.length > 0 && permit && (
+            {selected.length > 0 && canHardDelete && (
                 <div className="mt-4">
                     <Button
                         label={`Delete ${selected.length} student(s)`}
                         icon="pi pi-trash"
                         className="p-button-danger"
-                        onClick={() => confirmDelete(selected.map(s => s.id))}
+                        onClick={() => requestDelete(selected.map(s => s.id))}
                         disabled={isDeleting}
                     />
                 </div>
@@ -344,6 +336,21 @@ const Students: React.FC<StudentsProps> = ({
                     ))}
                 </div>
             </OverlayPanel>
+            <Dialog header="Permanently delete student records" visible={deleteDialogOpen} onHide={() => !isDeleting && setDeleteDialogOpen(false)} modal className="w-[95vw] max-w-xl">
+                <div className="space-y-4">
+                    <p className="rounded bg-red-50 p-3 text-sm text-red-800">
+                        Permanent deletion removes {deleteIds.length} student record(s). Use withdrawal or graduation to preserve school history. Deletion will be blocked when linked records prevent removal.
+                    </p>
+                    <div>
+                        <label htmlFor="student-deletion-reason" className="mb-1 block text-sm font-medium">Reason for deletion</label>
+                        <InputTextarea id="student-deletion-reason" value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} rows={3} maxLength={1000} className="w-full" placeholder="Explain why this record must be permanently deleted (at least 10 characters)." />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <Button label="Cancel" outlined onClick={() => setDeleteDialogOpen(false)} disabled={isDeleting} />
+                        <Button label="Delete permanently" severity="danger" onClick={confirmDelete} loading={isDeleting} disabled={isDeleting || deleteReason.trim().length < 10} />
+                    </div>
+                </div>
+            </Dialog>
         </section>
     );
 };

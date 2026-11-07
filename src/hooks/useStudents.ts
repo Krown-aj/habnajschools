@@ -122,9 +122,9 @@ export const useUpdateStudent = () => {
 
 export const useDeleteStudents = () => {
     const qc = useQueryClient();
-    return useMutation<{ deleted: number; message: string }, Error, string | string[]>({
-        mutationFn: (ids) => deleteStudents(ids),
-        onMutate: async (ids) => {
+    return useMutation<{ deleted: number; message: string }, Error, { ids: string | string[]; reason: string }>({
+        mutationFn: (input) => deleteStudents(input),
+        onMutate: async ({ ids }) => {
             await qc.cancelQueries({ queryKey: ['students'] });
             const snapshot = snapshotStudentsQueries(qc);
             const idArray = Array.isArray(ids) ? ids : [ids];

@@ -103,8 +103,8 @@ export const updateStudent = async (id: string, data: Partial<StudentModel> & { 
  * Delete one or more students by ID
  * DELETE /api/students?ids=<id>&ids=<id2>
  */
-export const deleteStudents = async (ids: string | string[]): Promise<{ deleted: number; message: string }> => {
-    const idArray = Array.isArray(ids) ? ids : [ids];
+export const deleteStudents = async (input: { ids: string | string[]; reason: string }): Promise<{ deleted: number; message: string }> => {
+    const idArray = Array.isArray(input.ids) ? input.ids : [input.ids];
     const searchParams = new URLSearchParams();
     idArray.forEach(id => searchParams.append('ids', id));
 
@@ -112,6 +112,7 @@ export const deleteStudents = async (ids: string | string[]): Promise<{ deleted:
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ reason: input.reason }),
     });
 
     const json = await parseJsonOrThrow(res, 'Failed to delete student(s)');

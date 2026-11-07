@@ -10,7 +10,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const url = new URL(request.url);
     const recordType = url.searchParams.get('recordType');
     const recordId = url.searchParams.get('recordId');
-    if (!recordId || !['STUDENT', 'PARENT'].includes(recordType ?? '')) {
+    if (!recordId || !['STUDENT', 'PARENT', 'STUDENT_DELETION'].includes(recordType ?? '')) {
       return NextResponse.json({ error: 'A valid record type and record ID are required.' }, { status: 400 });
     }
 

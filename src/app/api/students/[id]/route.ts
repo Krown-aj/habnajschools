@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@/generated/prisma';
-import { studentUpdateSchema } from '@/lib/schemas/index';
+import { studentDeletionSchema, studentUpdateSchema } from '@/lib/schemas/index';
 import { validateSession, validateRequestBody, handleError, successResponse, UserRole } from '@/lib/utils/api-helpers';
 import bcrypt from 'bcryptjs';
 import { getCorrectionDiff } from '@/lib/record-corrections';
@@ -281,15 +281,59 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
     try {
         const { id } = await params;
-        const validation = await validateSession([UserRole.SUPER, UserRole.ADMIN, UserRole.MANAGEMENT]);
+        const validation = await validateSession([UserRole.SUPER]);
         if (validation.error) return validation.error;
+        const bodyValidation = await validateRequestBody(request, studentDeletionSchema);
+        if (bodyValidation.error) return bodyValidation.error;
+        const { reason } = bodyValidation.data!;
 
-        await prisma.student.delete({
-            where: { id: id }
+        await prisma.$transaction(async (tx) => {
+            const student = await tx.student.findUnique({
+                where: { id },
+                select: {
+                    id: true,
+                    admissionnumber: true,
+                    firstname: true,
+                    othername: true,
+                    surname: true,
+                    enrollmentStatus: true,
+                    classid: true,
+                    section: true,
+                },
+            });
+            if (!student) throw new Error('STUDENT_NOT_FOUND');
+
+            await tx.recordCorrection.create({
+                data: {
+                    recordType: 'STUDENT_DELETION',
+                    recordId: student.id,
+                    studentId: student.id,
+                    reason,
+                    before: {
+                        admissionnumber: student.admissionnumber,
+                        firstname: student.firstname,
+                        othername: student.othername,
+                        surname: student.surname,
+                        enrollmentStatus: student.enrollmentStatus,
+                        classid: student.classid,
+                        section: student.section,
+                    },
+                    after: { deleted: true },
+                    actorId: validation.session!.user.id,
+                    actorRole: validation.userRole,
+                },
+            });
+            await tx.student.delete({ where: { id } });
         });
 
         return successResponse({ message: 'Student deleted successfully' });
     } catch (error) {
+        if (error instanceof Error && error.message === 'STUDENT_NOT_FOUND') {
+            return NextResponse.json({ error: 'Student record was not found.' }, { status: 404 });
+        }
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+            return NextResponse.json({ error: 'This student has linked school records and cannot be permanently deleted. Use the withdrawal or graduation workflow instead.' }, { status: 409 });
+        }
         return handleError(error, 'Failed to delete student');
     }
 }

@@ -117,6 +117,11 @@ export const bulkStudentLifecycleSchema = z.object({
 });
 export type BulkStudentLifecycleSchema = z.infer<typeof bulkStudentLifecycleSchema>;
 
+export const studentDeletionSchema = z.object({
+    reason: z.string().trim().min(10, 'Deletion reason must be at least 10 characters.').max(1000),
+});
+export type StudentDeletionSchema = z.infer<typeof studentDeletionSchema>;
+
 // Teacher Schema
 export const teacherSchema = z.object({
     title: z.string().min(1, { message: "Title is required!" }),
